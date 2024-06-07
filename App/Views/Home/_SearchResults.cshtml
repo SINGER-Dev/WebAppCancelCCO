@@ -1,0 +1,58 @@
+﻿@model List<ApplicationResponeModel>
+
+@if (Model != null && Model.Count > 0)
+{
+    <ul>
+        @* @foreach (var result in Model)
+        {
+            <li>@result</li>
+        } *@
+        <table id="example" class="display" style="width:100%">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>วันที่สร้างใบคำขอ</th>
+                    <th>เอกสาร</th>
+                    <th>สถานะ </th>
+                    <th>สาขา </th>
+                    <th>ชื่อสินค้าและหมายเลขสินค้า</th>
+                    <th>สถานะสัญญา </th>
+                    <th>สถานะรับสินค้า </th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var result in Model)
+                {
+                    <tr>
+                        <td><i class="fa-solid fa-folder-open" onclick="location.href = '@Url.Action("FormCancel", "Home", new { ApplicationCode = @result.ApplicationCode })'" style="color: #B197FC;cursor:pointer"></i></td>
+                        <td>@result.ApplicationDate</td>
+                        <td><B>เลขที่ใบคำขอ</B> @result.ApplicationCode <br> <B>เลขที่บัญชี :</B> @result.AccountNo</td>
+                        <td>@result.ApplicationStatusID</td>
+                        <td>@result.SaleDepName <br> <B>รหัสาขา : </B>@result.SaleDepCode</td>
+                        <td>@result.ProductModelName <br> <B>SerialNo : </B>@result.ProductSerialNo</td>
+                        @if (result.signedStatus == "เรียบร้อย")
+                        {
+                            <td><span class="badge bg-success">@result.signedStatus</span></td>
+                        }
+                        else
+                        {
+                            <td><span class="badge bg-warning" style="color:#000">@result.signedStatus</span></td>
+                        }
+                        @if (result.statusReceived == "รับสินค้าแล้ว")
+                        {
+                            <td><span class="badge bg-success">@result.statusReceived</span></td>
+                        }
+                        else
+                        {
+                            <td><span class="badge bg-warning" style="color:#000">@result.statusReceived</span></td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </ul>
+}
+else
+{
+    <p>No results found.</p>
+}

@@ -1,8 +1,34 @@
 ﻿@{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = " ระบบ ยกเลิกใบคำขอ  SG Finance+ ";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+
+@using (Html.BeginForm("Search", "Home", FormMethod.Post, new { id = "searchForm" }))
+{   
+    <div class="mb-3 row">
+        <label for="AccountNo" class="col-sm-2 col-form-label">บัญชีเลขที่</label>
+        <div class="col-sm-10">
+            <input type="text" class="form-control" id="AccountNo" name="AccountNo" placeholder="บัญชีเลขที่">
+        </div>
+    </div>
+    <div class="mb-3 row">
+        <label for="ApplicationCode" class="col-sm-2 col-form-label">เลขที่ใบคำขอ</label>
+        <div class="col-sm-10">
+            <input type="text" class="form-control" id="ApplicationCode" name="ApplicationCode" placeholder="เลขที่ใบคำขอ">
+        </div>
+    </div>
+
+    <div class="mb-3 row">
+    <label for="inputPassword" class="col-sm-2 col-form-label"></label>
+        <div class="col-sm-10">
+            <button type="submit" class="btn btn-primary mb-3">ค้นหา</button>
+        </div>
+    </div>
+}
+
+<div class="loaddong">
+    <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
 </div>
+<div id="searchResults"></div>

@@ -1,0 +1,67 @@
+﻿@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@{
+}
+@model FormCancelModel
+
+<form class="row g-3" id="FormCancel" asp-action="UpdateDataCancel" method="post">
+    <div class="col-md-12">
+        <label for="ApplicationCode" class="form-label">ApplicationCode</label>
+        <input type="text" class="form-control" id="ApplicationCode" name="ApplicationCode" value="@Model.ApplicationCode" readonly>
+    </div>
+
+    <div class="col-md-12">
+        <label for="AccountNo" class="form-label">AccountNo</label>
+        <input type="text" class="form-control" id="AccountNo" name="AccountNo" value="@Model.AccountNo" readonly>
+    </div>
+
+    <div class="col-md-12">
+        <label for="SaleDepName" class="form-label">SaleDepName</label>
+        <input type="text" class="form-control" id="SaleDepName"  value="@Model.SaleDepName" readonly>
+    </div>
+
+    <div class="col-md-12">
+        <label for="ProductModelName" class="form-label">ProductModelName</label>
+        <input type="text" class="form-control" id="ProductModelName" value="@Model.ProductModelName" readonly>
+    </div>
+
+    <div class="col-md-12">
+        <label for="ProductSerialNo" class="form-label">ProductSerialNo</label>
+        <input type="text" class="form-control" id="ProductSerialNo" value="@Model.ProductSerialNo" readonly>
+    </div>
+    <div class="col-md-12">
+        <label for="ProductSerialNo" class="form-label">สถานะ</label>
+        <input type="text" class="form-control" id="ProductSerialNo" value="@Model.applicationstatusid" readonly>
+    </div>
+
+    <div class="col-12">
+        <label for="Remark" class="form-label">Remark  <span style="color:red">*</span></label>
+        <input type="text" class="form-control" id="Remark" name="Remark" placeholder="Remark" required>
+    </div>
+    <div class="col-12">
+        <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="ExceptIMEI" name="ExceptIMEI" value="Y" />
+            <input type="hidden" class="form-check-input" name="ExceptIMEI" value="N" />
+            
+            <label class="form-check-label" for="ExceptIMEI">
+                ยกเว้น IMEI
+            </label>
+        </div>
+        <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="ExceptCus" name="ExceptCus" value="Y" />
+            <input type="hidden" class="form-check-input" name="ExceptCus" value="N" />
+            
+            <label class="form-check-label" for="ExceptCus">
+                ยกเว้นลูกค้า
+            </label>
+        </div>
+    </div>
+    <div class="col-12">
+        <label for="CANCEL_USER" class="form-label">ชื่อผู้ยกเลิก <span style="color:red">*</span> </label>
+        <input type="text" class="form-control" id="CANCEL_USER" name="CANCEL_USER" placeholder="CANCEL_USER" required>
+    </div>
+    <div class="col-12">
+        <button type="submit" class="btn btn-primary" id="btnFetch">ยืนยันการยกเลิกใบคำขอ</button>
+    </div>
+</form>
