@@ -7,45 +7,187 @@
         {
             <li>@result</li>
         } *@
-        <table id="example" class="display" style="width:100%">
+        <table id="example" class="display table-secondary" style="width:100%">
             <thead>
-                <tr>
+                <tr style="background-color:#e2e3e5">
                     <th></th>
                     <th>วันที่สร้างใบคำขอ</th>
                     <th>เอกสาร</th>
-                    <th>สถานะ </th>
                     <th>สาขา </th>
                     <th>ชื่อสินค้าและหมายเลขสินค้า</th>
+                    <th>สถานะ </th>
                     <th>สถานะสัญญา </th>
-                    <th>สถานะรับสินค้า </th>
+                    <th>ตรวจสอบ </th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var result in Model)
                 {
                     <tr>
-                        <td><i class="fa-solid fa-folder-open" onclick="location.href = '@Url.Action("FormCancel", "Home", new { ApplicationCode = @result.ApplicationCode })'" style="color: #B197FC;cursor:pointer"></i></td>
-                        <td>@result.ApplicationDate</td>
-                        <td><B>เลขที่ใบคำขอ</B> @result.ApplicationCode <br> <B>เลขที่บัญชี :</B> @result.AccountNo</td>
-                        <td>@result.ApplicationStatusID</td>
-                        <td>@result.SaleDepName <br> <B>รหัสาขา : </B>@result.SaleDepCode</td>
-                        <td>@result.ProductModelName <br> <B>SerialNo : </B>@result.ProductSerialNo</td>
-                        @if (result.signedStatus == "เรียบร้อย")
-                        {
-                            <td><span class="badge bg-success">@result.signedStatus</span></td>
-                        }
-                        else
-                        {
-                            <td><span class="badge bg-warning" style="color:#000">@result.signedStatus</span></td>
-                        }
-                        @if (result.statusReceived == "รับสินค้าแล้ว")
-                        {
-                            <td><span class="badge bg-success">@result.statusReceived</span></td>
-                        }
-                        else
-                        {
-                            <td><span class="badge bg-warning" style="color:#000">@result.statusReceived</span></td>
-                        }
+                        <td>
+
+                            @if (@result.datenowcheck == "1")
+                            {
+                                <i class="fa-solid fa-folder-open" onclick="location.href = '@Url.Action("FormCancel", "Home", new { ApplicationCode = @result.ApplicationCode })'" style="color: #B197FC;cursor:pointer"></i>
+                            }
+                           
+                        
+                        </td>
+                        <td>
+                            <B>วันที่สร้างใบคำขอ : </B> @result.ApplicationDate <br>
+                            <B>เลขที่ใบคำขอ : </B> @result.ApplicationCode <br>
+                            @result.RefCode
+                        </td>
+                        <td>
+                            <B>เลขที่สัญญา :</B> @result.AccountNo <br>
+                            <B>เลขบัตรประชาชน :</B> @result.CustomerID <br>
+                            <B>ชื่อลูกค้า :</B> @result.Cusname<br>
+                            <B>เบอร์โทรศัพท์ลูกค้า :</B> @result.cusMobile
+                        </td>
+
+                        <td><span class="d-inline-block text-truncate" style="max-width: 180px;" data-bs-toggle="tooltip" data-bs-placement="top" title="@result.SaleDepName">@result.SaleDepName </span><br>
+                            <B>รหัสาขา : </B>@result.SaleDepCode <br>
+                            <B>ชื่อพนักงานขาย : </B>@result.SaleName <br>
+                            <B>เบอร์พนักงานขาย : </B>@result.SaleTelephoneNo
+                        </td>
+                        <td>
+                            <span class="d-inline-block text-truncate" style="max-width: 180px;" data-bs-toggle="tooltip" data-bs-placement="top" title="@result.ProductModelName">@result.ProductModelName  </span><br>
+                            <B>Serial / IMEI : </B>@result.ProductSerialNo
+                        </td>
+
+                        <td>
+                            @if (result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว" && result.ApplicationStatusID == "CLOSED" && result.numregis == "เรียบร้อย")
+                            {
+                                <span class="badge bg-success">@result.ApplicationStatusID</span> <i class="C100StatusClosed fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
+                                <br>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning" style="color:#000">@result.ApplicationStatusID</span> <br>
+                            }
+                            @if (@result.datenowcheck != "1")
+                            {
+                                @if (@result.LINE_STATUS == "TRANSFERED")
+                                {
+                                    <span class="badge bg-success" >@result.LINE_STATUS</span>
+                                }
+                                else if (@result.LINE_STATUS == "PREPARE")
+                                {
+                                    <span class="badge bg-info">@result.LINE_STATUS</span>
+                                }
+                                else if (@result.LINE_STATUS == "NOTVERIFIED")
+                                {
+                                    <span class="badge bg-warning" style="color:#000">@result.LINE_STATUS</span>
+                                }
+                                else
+                                {
+
+                                }
+                            }
+                        </td>
+
+                        
+                        <td>
+                            <B>จำนวนสัญญา :</B>
+                            @if (result.numdoc == "ปกติ")
+                            {
+                                 <span class="badge bg-success">@result.numdoc</span> <br>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning" style="color:#000">@result.numdoc</span> <br>
+                            }
+
+                            <B>สถานะสัญญา :</B> 
+                            @if (result.signedStatus == "เรียบร้อย")
+                            {
+
+                                <span class="badge bg-success">@result.signedStatus</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning" style="color:#000">@result.signedStatus</span>
+                            }
+                            @if (result.ApplicationStatusID == "CLOSING" && result.statusReceived != "รับสินค้าแล้ว")
+                            {
+                                <i class="GenEsignature fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
+                            }
+                            <br>
+
+
+                            @if (result.statusReceived == "รับสินค้าแล้ว")
+                            {
+                                <B>สถานะรับสินค้า : </B><span class="badge bg-success">@result.statusReceived</span>
+                            }
+                            else
+                            {
+                                <B>สถานะรับสินค้า : </B><span class="badge bg-warning" style="color:#000">@result.statusReceived</span>
+                            }
+                        </td>
+                        
+
+                         <td>
+
+                            @if (result.numregis == "เรียบร้อย")
+                            {
+                                <B>ลงทะเบียนเครื่อง : </B>
+
+                                <span class="badge bg-success">@result.numregis</span>
+                                @if (result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว")
+                                {
+                                    <i class="RegisIMEI fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
+                                }
+                                <br>
+                            }
+                            else
+                            {
+                                <B>ลงทะเบียนเครื่อง : </B>
+
+                                <span class="badge bg-warning" style="color:#000">@result.numregis</span>
+
+                                @if (result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว")
+                                {
+                                    <i class="RegisIMEI fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
+                                }
+                                <br>
+                            }
+
+                            @if (result.newnum == "เรียบร้อย")
+                            {
+                                <B>NewSale : </B>
+
+                                <span class="badge bg-success">@result.newnum</span>
+                                
+                                <br>
+                            }
+                            else
+                            {
+                                <B>NewSale : </B>
+
+                                <span class="badge bg-warning" style="color:#000">@result.newnum</span>
+                                @if (result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว")
+                                {
+                                    <i class="GetAddTNewSalesNewSGFinance fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
+                                }
+                                <br>
+                            }
+
+                            @if (result.paynum == "เรียบร้อย")
+                            {
+                                <B>NewPayment : </B>
+
+                                <span class="badge bg-success">@result.paynum</span>
+                            }
+                            else
+                            {
+                                <B>NewPayment : </B>
+
+                                <span class="badge bg-warning" style="color:#000">@result.paynum</span>
+                            }
+
+    
+                        </td>
+
                     </tr>
                 }
             </tbody>

@@ -1,0 +1,55 @@
+﻿@model List<SearchGetApplicationHistoryRespone>
+
+@if (Model != null && Model.Count > 0)
+{
+    <ul>
+
+
+
+        <table id="example" class="display table-secondary" style="width:100%">
+            <thead>
+                <tr style="background-color:#e2e3e5">
+                    <th>วันที่ยกใบคำขอ</th>
+                    <th>เอกสาร</th>
+                    <th>สาขา </th>
+                    <th>ชื่อสินค้าและหมายเลขสินค้า</th>
+                    <th>สถานะ </th>
+                    <th>ผู้ดำเนินการ </th>
+                    <th>เหตุผล </th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var result in Model)
+                {
+                    <tr>
+                        <td>@result.CreateDate</td>
+                        <td>
+                            <B>เลขที่ใบคำขอ</B> @result.ApplicationCode <br>
+                            <B>เลขที่บัญชี :</B> @result.AccountNo <br>
+                            <B>เลขบัตรประชาชน :</B> @result.CustomerID
+                        </td>
+                        
+                        <td>@result.SaleDepName <br> <B>รหัสาขา : </B>@result.SaleDepCode</td>
+                        <td>@result.ProductModelName <br> <B>SerialNo : </B>@result.ProductSerialNo</td>
+
+                        @if (result.ApplicationStatusID == "CLOSED")
+                        {
+                            <td><span class="badge bg-success">@result.ApplicationStatusID</span></td>
+                        }
+                        else
+                        {
+                            <td><span class="badge bg-warning" style="color:#000">@result.ApplicationStatusID</span></td>
+                        }
+                        <td>@result.CreateBy</td>
+                        <td>@result.ApplicationRemark</td>
+                        
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </ul>
+}
+else
+{
+    <p>No results found.</p>
+}

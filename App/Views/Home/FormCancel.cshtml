@@ -5,40 +5,102 @@
 }
 @model FormCancelModel
 
-<form class="row g-3" id="FormCancel" asp-action="UpdateDataCancel" method="post">
-    <div class="col-md-12">
-        <label for="ApplicationCode" class="form-label">ApplicationCode</label>
-        <input type="text" class="form-control" id="ApplicationCode" name="ApplicationCode" value="@Model.ApplicationCode" readonly>
+<form class="row g-3 pt-3" id="FormCancel" asp-action="UpdateDataCancel" method="post">
+
+    <div class="mb-3 row">
+
+        <label for="ApplicationCode" class="col-sm-2 col-form-label">เลขที่ใบคำขอ</label>
+        <div class="col-sm-4">
+            <input type="text" class="form-control" id="ApplicationCode" name="ApplicationCode" placeholder="เลขที่ใบคำขอ" value="@Model.ApplicationCode" readonly>
+        </div>
+
+
+        <label for="AccountNo" class="col-sm-2 col-form-label">เลขที่สัญญา</label>
+        <div class="col-sm-4">
+            <input type="text" class="form-control" id="AccountNo" placeholder="เลขที่สัญญา" value="@Model.AccountNo" readonly>
+        </div>
     </div>
 
-    <div class="col-md-12">
-        <label for="AccountNo" class="form-label">AccountNo</label>
-        <input type="text" class="form-control" id="AccountNo" name="AccountNo" value="@Model.AccountNo" readonly>
+
+    <div class="mb-3 row">
+        <label for="SaleDepName" class="col-sm-2 col-form-label">SaleDepName</label>
+        <div class="col-sm-4">
+            <input type="text" class="form-control" id="SaleDepName"  placeholder="SaleDepName" value="@Model.SaleDepName" readonly>
+        </div>
+
+
+        <label for="ProductModelName" class="col-sm-2 col-form-label">ProductModelName</label>
+        <div class="col-sm-4">
+            <input type="text" class="form-control" id="ProductModelName"  placeholder="ProductModelName" value="@Model.ProductModelName" readonly>
+        </div>
     </div>
 
-    <div class="col-md-12">
-        <label for="SaleDepName" class="form-label">SaleDepName</label>
-        <input type="text" class="form-control" id="SaleDepName"  value="@Model.SaleDepName" readonly>
+
+    <div class="mb-3 row">
+        <label for="ProductSerialNo" class="col-sm-2 col-form-label">Serial / IMEI</label>
+        <div class="col-sm-4">
+            <input type="text" class="form-control" id="ProductSerialNo" placeholder="ProductSerialNo" value="@Model.ProductSerialNo" readonly>
+        </div>
+
+
+        <label for="ApplicationStatusID" class="col-sm-2 col-form-label">สถานะ</label>
+        <div class="col-sm-4">
+            <input type="text" class="form-control" id="ApplicationStatusID" placeholder="ApplicationStatusID" value="@Model.ApplicationStatusID" readonly>
+        </div>
     </div>
 
-    <div class="col-md-12">
-        <label for="ProductModelName" class="form-label">ProductModelName</label>
-        <input type="text" class="form-control" id="ProductModelName" value="@Model.ProductModelName" readonly>
+    <hr>
+    <div class="mb-3 row">
+        <label for="CustomerID" class="col-sm-2 col-form-label">เลขบัตรประชาชน</label>
+        <div class="col-sm-4">
+            <input type="text" class="form-control" id="CustomerID" placeholder="CustomerID" value="@Model.CustomerID" readonly>
+        </div>
+
+
+        <label for="Cusname" class="col-sm-2 col-form-label">ชื่อลูกค้า</label>
+        <div class="col-sm-4">
+            <input type="text" class="form-control" id="Cusname" placeholder="Cusname" value="@Model.Cusname" readonly>
+        </div>
     </div>
 
-    <div class="col-md-12">
-        <label for="ProductSerialNo" class="form-label">ProductSerialNo</label>
-        <input type="text" class="form-control" id="ProductSerialNo" value="@Model.ProductSerialNo" readonly>
+    <div class="mb-3 row">
+        <label for="cusMobile" class="col-sm-2 col-form-label">เบอร์โทรศัพท์ลูกค้า</label>
+        <div class="col-sm-4">
+            <input type="text" class="form-control" id="cusMobile" placeholder="cusMobile" value="@Model.cusMobile" readonly>
+        </div>
     </div>
-    <div class="col-md-12">
-        <label for="ProductSerialNo" class="form-label">สถานะ</label>
-        <input type="text" class="form-control" id="ProductSerialNo" value="@Model.applicationstatusid" readonly>
+
+    <hr>
+    <div class="mb-3 row">
+        <label for="SaleName" class="col-sm-2 col-form-label">ชื่อพนักงานขาย</label>
+        <div class="col-sm-4">
+            <input type="text" class="form-control" id="SaleName" placeholder="SaleName" value="@Model.SaleName" readonly>
+        </div>
+
+
+        <label for="SaleTelephoneNo" class="col-sm-2 col-form-label">เบอร์พนักงานขาย</label>
+        <div class="col-sm-4">
+            <input type="text" class="form-control" id="SaleTelephoneNo" placeholder="SaleTelephoneNo" value="@Model.SaleTelephoneNo" readonly>
+        </div>
     </div>
 
     <div class="col-12">
-        <label for="Remark" class="form-label">Remark  <span style="color:red">*</span></label>
-        <input type="text" class="form-control" id="Remark" name="Remark" placeholder="Remark" required>
+        <label for="Remark" class="form-label">เหตุผล  <span style="color:red">*</span></label>
+        <select class="form-control" id="Remark" name="Remark">
+            <option>กรุณาเลือกเหตุผลการยกเลิก</option>
+            <option value="กรอก  Serial No / IMEI  ผิด">กรอก  Serial No / IMEI  ผิด</option>
+            <option value="ส่วนลดผิด">ส่วนลดผิด</option>
+            <option value="รุ่น/สี ผิด">รุ่น/สี ผิด</option>
+            <option value="เงินดาวน์ / Term ผิด">เงินดาวน์ / Term ผิด</option>
+            <option value="ระบบ  Error">ระบบ  Error</option>
+            <option value="อื่นๆ">อื่นๆ</option>
+        </select>
     </div>
+
+    <div class="col-12">
+        <input type="text" class="form-control" id="Other" name="Other" placeholder="เหตุผลการยกเลิก" style="display:none">
+    </div>
+
     <div class="col-12">
         <div class="form-check">
             <input type="checkbox" class="form-check-input" id="ExceptIMEI" name="ExceptIMEI" value="Y" />
@@ -56,10 +118,6 @@
                 ยกเว้นลูกค้า
             </label>
         </div>
-    </div>
-    <div class="col-12">
-        <label for="CANCEL_USER" class="form-label">ชื่อผู้ยกเลิก <span style="color:red">*</span> </label>
-        <input type="text" class="form-control" id="CANCEL_USER" name="CANCEL_USER" placeholder="CANCEL_USER" required>
     </div>
     <div class="col-12">
         <button type="submit" class="btn btn-primary" id="btnFetch">ยืนยันการยกเลิกใบคำขอ</button>

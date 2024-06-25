@@ -9,17 +9,19 @@ using Serilog;
 using Newtonsoft.Json;
 using System.Text;
 using RestSharp;
-using System.Reflection;
-using Microsoft.AspNetCore.Mvc.ApplicationModels;
+using System.Globalization;
+using Microsoft.AspNetCore.Http;
 
 namespace App.Controllers
 {
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
-        string strConnString, DATABASEK2, WSCANCEL, UrlEztax, UsernameEztax, PasswordEztax, ClientIdEztax;
+        string strConnString, DATABASEK2, WSCANCEL, UrlEztax, UsernameEztax, PasswordEztax, ClientIdEztax, ApiKey, SGAPIESIG;
+
         public HomeController(ILogger<HomeController> logger)
         {
+
             var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
             var builder = new ConfigurationBuilder()
                         .SetBasePath(Directory.GetCurrentDirectory())
@@ -35,15 +37,49 @@ namespace App.Controllers
             UsernameEztax = builder.GetConnectionString("UsernameEztax");
             PasswordEztax = builder.GetConnectionString("PasswordEztax");
             ClientIdEztax = builder.GetConnectionString("ClientIdEztax");
+
+            ApiKey = builder.GetConnectionString("ApiKey");
+            SGAPIESIG = builder.GetConnectionString("SGAPIESIG");
+
+
         }
 
         public IActionResult Index()
         {
+            var EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            if (EMP_CODE == null)
+            {
+                return Redirect("/Login");
+            }
+            ViewBag.EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            ViewBag.FullName = HttpContext.Session.GetString("FullName");
+            return View();
+        }
+
+        public IActionResult GetApplicationHistory()
+        {
+            var EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            if (EMP_CODE == null)
+            {
+                return Redirect("/Login");
+            }
+
+            ViewBag.EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            ViewBag.FullName = HttpContext.Session.GetString("FullName");
             return View();
         }
 
         public async Task<IActionResult> FormCancel(string ApplicationCode)
         {
+            var EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            if (EMP_CODE == null)
+            {
+                return Redirect("/Login");
+            }
+
+            ViewBag.EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            ViewBag.FullName = HttpContext.Session.GetString("FullName");
+
             FormCancelModel formCancelModel = new FormCancelModel();
             formCancelModel.ApplicationCode = ApplicationCode;
 
@@ -58,13 +94,79 @@ namespace App.Controllers
             formCancelModel.SaleDepName = _GetApplicationRespone.SaleDepName;
             formCancelModel.ProductModelName = _GetApplicationRespone.ProductModelName;
             formCancelModel.ProductSerialNo = _GetApplicationRespone.ProductSerialNo;
-            formCancelModel.applicationstatusid = _GetApplicationRespone.applicationstatusid;
-            
+            formCancelModel.ApplicationStatusID = _GetApplicationRespone.ApplicationStatusID;
+
+            formCancelModel.CustomerID = _GetApplicationRespone.CustomerID;
+            formCancelModel.Cusname = _GetApplicationRespone.Cusname;
+            formCancelModel.cusMobile = _GetApplicationRespone.cusMobile;
+            formCancelModel.SaleName = _GetApplicationRespone.SaleName;
+            formCancelModel.SaleTelephoneNo = _GetApplicationRespone.SaleTelephoneNo;
+
             return View(formCancelModel);
         }
 
         [HttpPost]
-        public ActionResult Search(Models.ApplicationModel _ApplicationModel)
+        public ActionResult SearchGetApplicationHistory(SearchGetApplicationHistory _SearchGetApplicationHistory)
+        {
+            Log.Debug(JsonConvert.SerializeObject(_SearchGetApplicationHistory));
+
+            List<SearchGetApplicationHistoryRespone> _SearchGetApplicationHistoryResponeMaster = new List<SearchGetApplicationHistoryRespone>();
+            SqlConnection connection = new SqlConnection();
+            connection.ConnectionString = strConnString;
+            try
+            {
+                SqlCommand sqlCommand;
+                string strSQL = DATABASEK2 + ".[dbo].[GetApplicationHistory]";
+                sqlCommand = new SqlCommand(strSQL, connection);
+                sqlCommand.CommandType = CommandType.StoredProcedure;
+                sqlCommand.Parameters.AddWithValue("AccountNo", _SearchGetApplicationHistory.AccountNo);
+                sqlCommand.Parameters.AddWithValue("ApplicationCode", _SearchGetApplicationHistory.ApplicationCode);
+                sqlCommand.Parameters.AddWithValue("startdate", _SearchGetApplicationHistory.startdate);
+                sqlCommand.Parameters.AddWithValue("enddate", _SearchGetApplicationHistory.enddate);
+
+                SqlDataAdapter dtAdapter = new SqlDataAdapter();
+                dtAdapter.SelectCommand = sqlCommand;
+                DataTable dt = new DataTable();
+                dtAdapter.Fill(dt);
+                connection.Close();
+                if (dt.Rows.Count > 0)
+                {
+
+                    foreach (DataRow row in dt.Rows)
+                    {
+                        SearchGetApplicationHistoryRespone _SearchGetApplicationHistoryRespone = new SearchGetApplicationHistoryRespone();
+
+                        _SearchGetApplicationHistoryRespone.ApplicationCode = row["ApplicationCode"].ToString();
+                        _SearchGetApplicationHistoryRespone.AccountNo = row["AccountNo"].ToString();
+                        _SearchGetApplicationHistoryRespone.ProductSerialNo = row["ProductSerialNo"].ToString();
+                        _SearchGetApplicationHistoryRespone.ProductModelName = row["ProductModelName"].ToString();
+                        _SearchGetApplicationHistoryRespone.ApplicationRemark = row["ApplicationRemark"].ToString();
+                        _SearchGetApplicationHistoryRespone.CreateDate = row["CreateDate"].ToString();
+                        _SearchGetApplicationHistoryRespone.CreateBy = row["CreateBy"].ToString();
+                        _SearchGetApplicationHistoryRespone.SaleDepName = row["SaleDepName"].ToString();
+                        _SearchGetApplicationHistoryRespone.SaleDepCode = row["SaleDepCode"].ToString();
+                        _SearchGetApplicationHistoryRespone.CustomerID = row["CustomerID"].ToString();
+                        _SearchGetApplicationHistoryRespone.cusMobile = row["cusMobile"].ToString();
+                        _SearchGetApplicationHistoryRespone.Cusname = row["Cusname"].ToString();
+                        _SearchGetApplicationHistoryRespone.ApplicationStatusID = row["ApplicationStatusID"].ToString();
+                        _SearchGetApplicationHistoryResponeMaster.Add(_SearchGetApplicationHistoryRespone);
+                    }
+                }
+
+                Log.Debug(JsonConvert.SerializeObject(_SearchGetApplicationHistoryResponeMaster));
+
+                sqlCommand.Parameters.Clear();
+                
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex.Message);
+            }
+            return PartialView("_SearchGetApplicationHistory", _SearchGetApplicationHistoryResponeMaster);
+        }
+
+        [HttpPost]
+        public ActionResult Search(ApplicationRq _ApplicationModel)
         {
             Log.Debug(JsonConvert.SerializeObject(_ApplicationModel));
             List<ApplicationResponeModel> _ApplicationResponeModelMaster = new List<ApplicationResponeModel>();
@@ -80,10 +182,19 @@ namespace App.Controllers
                 sqlCommand.CommandType = CommandType.StoredProcedure;
                 sqlCommand.Parameters.AddWithValue("AccountNo", _ApplicationModel.AccountNo);
                 sqlCommand.Parameters.AddWithValue("ApplicationCode", _ApplicationModel.ApplicationCode);
+                sqlCommand.Parameters.AddWithValue("ProductSerialNo", _ApplicationModel.ProductSerialNo);
+                sqlCommand.Parameters.AddWithValue("CustomerID", _ApplicationModel.CustomerID);
+                sqlCommand.Parameters.AddWithValue("status", _ApplicationModel.status);
+                sqlCommand.Parameters.AddWithValue("startdate", _ApplicationModel.startdate);
+                sqlCommand.Parameters.AddWithValue("enddate", _ApplicationModel.enddate);
+                sqlCommand.Parameters.AddWithValue("CustomerName", _ApplicationModel.CustomerName);
+                sqlCommand.Parameters.AddWithValue("StatusRegis", _ApplicationModel.StatusRegis);
+                
                 SqlDataAdapter dtAdapter = new SqlDataAdapter();
                 dtAdapter.SelectCommand = sqlCommand;
                 DataTable dt = new DataTable();
                 dtAdapter.Fill(dt);
+                connection.Close();
                 if (dt.Rows.Count > 0)
                 {
 
@@ -103,22 +214,41 @@ namespace App.Controllers
                         _ApplicationResponeModel.signedStatus = row["signedStatus"].ToString();
                         _ApplicationResponeModel.statusReceived = row["statusReceived"].ToString();
                         _ApplicationResponeModel.ApplicationCode = row["ApplicationCode"].ToString();
-                        
+                        _ApplicationResponeModel.CustomerID = row["CustomerID"].ToString();
 
-                        _ApplicationResponeModel.ApplicationDate = row["ApplicationDate"].ToString();
+                        _ApplicationResponeModel.SaleTelephoneNo = row["SaleTelephoneNo"].ToString();
+                        _ApplicationResponeModel.ApplicationDate = row["ApplicationDate2"].ToString();
+
+                        _ApplicationResponeModel.numregis = row["numregis"].ToString();
+                        _ApplicationResponeModel.newnum = row["newnum"].ToString();
+                        _ApplicationResponeModel.paynum = row["paynum"].ToString();
+                        _ApplicationResponeModel.numdoc = row["numdoc"].ToString();
+                        _ApplicationResponeModel.Cusname = row["Cusname"].ToString();
+                        _ApplicationResponeModel.cusMobile = row["cusMobile"].ToString();
+                        _ApplicationResponeModel.SaleName = row["SaleName"].ToString();
+                        _ApplicationResponeModel.LINE_STATUS = row["LINE_STATUS"].ToString();
+                        _ApplicationResponeModel.RefCode = row["RefCode"].ToString();
                         
+                        string datenowText = DateTime.Now.ToString("yyyy-MM-dd", new CultureInfo("en-US"));
+
+                        if (row["ApplicationDate"].ToString() == datenowText)
+                        {
+                            _ApplicationResponeModel.datenowcheck = "1";
+                        }
+                        else
+                        {
+                            _ApplicationResponeModel.datenowcheck = "0";
+                        }
                         _ApplicationResponeModelMaster.Add(_ApplicationResponeModel);
                     }
                 }
 
-                Log.Debug(JsonConvert.SerializeObject(_ApplicationResponeModelMaster));
-
                 sqlCommand.Parameters.Clear();  
-                connection.Close();
+                
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.ToString());
+                Log.Debug(ex.Message);
             }
 
             return PartialView("_SearchResults", _ApplicationResponeModelMaster);
@@ -130,50 +260,103 @@ namespace App.Controllers
             string ResultDescription = "";
             try
             {
-                
-                SqlConnection connection = new SqlConnection();
-                connection.ConnectionString = strConnString;
-                connection.Open();
-
-                GetApplication _GetApplication = new GetApplication();
-                _GetApplication.ApplicationCode = _FormConfirmModel.ApplicationCode;
-                GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
-
-                //Cancel Application
-                //CCOWebServiceModel _CCOWebService = new CCOWebServiceModel();
-                //_CCOWebService.id = _GetApplicationRespone.ApplicationID;
-                //MessageModel _MessageModel = await CCOWebService(_CCOWebService);
-
-                //Cancel EZ Tax
-                //GetTokenEZTaxRp _GetTokenEZTaxRp = await GetTokenEZTax();
-
-                //Cancel econtract
 
 
-                SqlCommand sqlCommand;
-                string strSQL = DATABASEK2 + ".[dbo].[CancelApplication]";
-                sqlCommand = new SqlCommand(strSQL, connection);
-                sqlCommand.CommandType = CommandType.StoredProcedure;
-                sqlCommand.Parameters.AddWithValue("ApplicationCode", _GetApplicationRespone.ApplicationCode);
-                sqlCommand.Parameters.AddWithValue("Remark", _FormConfirmModel.Remark);
-                sqlCommand.Parameters.AddWithValue("CANCEL_USER", _FormConfirmModel.CANCEL_USER);
-                sqlCommand.Parameters.AddWithValue("Except_IMEI", _FormConfirmModel.ExceptIMEI);
-                sqlCommand.Parameters.AddWithValue("Except_CUST", _FormConfirmModel.ExceptCus);
+                // Define the start and end times for the period (8:00 AM - 10:00 PM)
+                TimeSpan periodStart = new TimeSpan(8, 0, 0); // 8:00 AM
+                TimeSpan periodEnd = new TimeSpan(22, 0, 0); // 10:00 PM
 
-                SqlDataAdapter dtAdapter = new SqlDataAdapter();
-                dtAdapter.SelectCommand = sqlCommand;
-                DataTable dt = new DataTable();
-                dtAdapter.Fill(dt);
-                if (dt.Rows.Count > 0)
+                // Example time to check
+                DateTime now = DateTime.Now;
+                TimeSpan currentTime = now.TimeOfDay;
+
+                // Check if the current time is within the period
+                bool isWithinPeriod = currentTime >= periodStart && currentTime <= periodEnd;
+
+                if (isWithinPeriod)
                 {
-                    if ("ERROR" == dt.Rows[0]["Result"].ToString().ToUpper())
+                    SqlConnection connection = new SqlConnection();
+                    connection.ConnectionString = strConnString;
+                    connection.Open();
+
+                    GetApplication _GetApplication = new GetApplication();
+                    _GetApplication.ApplicationCode = _FormConfirmModel.ApplicationCode;
+                    GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
+
+                    //Cancel Application
+                    //CCOWebServiceModel _CCOWebService = new CCOWebServiceModel();
+                    //_CCOWebService.id = _GetApplicationRespone.ApplicationID;
+                    //MessageModel _MessageModel = await CCOWebService(_CCOWebService);
+
+                    //Cancel EZ Tax
+                    //GetTokenEZTaxRp _GetTokenEZTaxRp = await GetTokenEZTax();
+
+                    //Cancel econtract
+
+
+                    SqlCommand sqlCommand;
+                    string strSQL = DATABASEK2 + ".[dbo].[CancelApplication]";
+                    sqlCommand = new SqlCommand(strSQL, connection);
+                    sqlCommand.CommandType = CommandType.StoredProcedure;
+                    sqlCommand.Parameters.AddWithValue("ApplicationCode", _GetApplicationRespone.ApplicationCode);
+                    sqlCommand.Parameters.AddWithValue("Remark", _FormConfirmModel.Remark + "" + _FormConfirmModel.Other);
+                    sqlCommand.Parameters.AddWithValue("CANCEL_USER", HttpContext.Session.GetString("EMP_CODE"));
+                    sqlCommand.Parameters.AddWithValue("Except_IMEI", _FormConfirmModel.ExceptIMEI);
+                    sqlCommand.Parameters.AddWithValue("Except_CUST", _FormConfirmModel.ExceptCus);
+
+                    SqlDataAdapter dtAdapter = new SqlDataAdapter();
+                    dtAdapter.SelectCommand = sqlCommand;
+                    DataTable dt = new DataTable();
+                    dtAdapter.Fill(dt);
+                    connection.Close();
+                    if (dt.Rows.Count > 0)
                     {
-                        ResultDescription += _GetApplicationRespone.AccountNo + " " + dt.Rows[0]["ResultDescription"].ToString();
+                        if ("SUCCESS" != dt.Rows[0]["Result"].ToString().ToUpper())
+                        {
+                            ResultDescription += _GetApplicationRespone.AccountNo + " " + dt.Rows[0]["ResultDescription"].ToString();
+                        }
+                    }
+                    sqlCommand.Parameters.Clear();
+
+                    if (ResultDescription == "")
+                    {
+                        string currentDateTime = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+                        var requestBody = new
+                        {
+                            applicationCode = _GetApplicationRespone.ApplicationCode,
+                            applicationStatus = "CANCELLED",
+                            approvalStatus = "CANCELLED",
+                            approvalDatetime = currentDateTime,
+                            remark = _FormConfirmModel.Remark + "" + _FormConfirmModel.Other
+                        };
+
+                        Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody));
+
+                        using (HttpClient client = new HttpClient())
+                        {
+                            string jsonBody = JsonConvert.SerializeObject(requestBody);
+
+                            client.DefaultRequestHeaders.Add("apikey", ApiKey);
+                            client.DefaultRequestHeaders.Add("user", "DEV");
+
+                            var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                            HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/Service/C100_Status", content);
+                            int DeviceStatusCode = (int)responseDevice.StatusCode;
+
+                            Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+
+                            if (responseDevice.IsSuccessStatusCode)
+                            {
+                                var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
+
+                            }
+                        }
                     }
                 }
-                sqlCommand.Parameters.Clear();
-                connection.Close();
-
+                else
+                {
+                    ResultDescription = "ไม่สามารถยกเลิกรายการได้ เนื่องจากเลยกำหนดเวลาการยกเลิกแล้ว";
+                }
                 return ResultDescription;
             }
             catch(Exception ex)
@@ -185,10 +368,6 @@ namespace App.Controllers
             
         }
 
-        public IActionResult StatusSuccess()
-        {
-            return View();
-        }
         protected HttpWebRequest CreateWebRequest(string url)
         {
 
@@ -205,7 +384,7 @@ namespace App.Controllers
         }
 
         [HttpPost]
-        async public Task<MessageModel> CCOWebService(CCOWebServiceModel _CCOWebService)
+        public async Task<MessageModel> CCOWebService(CCOWebServiceModel _CCOWebService)
         {
             string result = "";
             MessageModel _MessageModel = new MessageModel();
@@ -265,9 +444,8 @@ namespace App.Controllers
             
         }
 
-
         [HttpPost]
-        async public Task<GetTokenEZTaxRp> GetTokenEZTax()
+        public async Task<GetTokenEZTaxRp> GetTokenEZTax()
         {
 
             GetTokenEZTaxRp _GetTokenEZTaxRp = new GetTokenEZTaxRp();
@@ -335,7 +513,7 @@ namespace App.Controllers
                 connection.Open();
                 SqlCommand sqlCommand;
 
-                string sql = "SELECT app.ApplicationID,app.AccountNo,app.ApplicationStatusID, app.ApplicationCode ,app.applicationstatusid,app.ProductID, app.ProductModelName,app.ProductSerialNo ,app.SaleDepCode,app.SaleDepName FROM " + DATABASEK2 + ".[dbo].[Application] app WHERE app.ApplicationCode = @ApplicationCode";
+                string sql = "SELECT app.ApplicationID,app.AccountNo,app.ApplicationStatusID,app.CustomerID, app.ApplicationCode ,app.ProductID, cus.FirstName + ' ' + cus.LastName as Cusname ,cus.MobileNo1 as cusMobile ,app.SaleName ,app.SaleTelephoneNo,app.ProductModelName,app.ProductSerialNo,app.ProductBrandName ,app.SaleDepCode,app.SaleDepName FROM " + DATABASEK2 + ".[dbo].[Application] app left join " + DATABASEK2 + ".[dbo].Customer cus on cus.CustomerID = app.CustomerID  WHERE app.ApplicationCode = @ApplicationCode";
                 sqlCommand = new SqlCommand(sql, connection);
                 sqlCommand.CommandType = CommandType.Text;
                 sqlCommand.Parameters.Add("@ApplicationCode", SqlDbType.NChar);
@@ -343,40 +521,273 @@ namespace App.Controllers
                 SqlDataAdapter dtAdapter = new SqlDataAdapter();
                 dtAdapter.SelectCommand = sqlCommand;
                 dtAdapter.Fill(dt);
+                connection.Close();
                 if (dt.Rows.Count > 0)
                 {
+                    Log.Debug(JsonConvert.SerializeObject(dt));
+
                     _GetApplicationRespone.statusCode = "PASS";
                     _GetApplicationRespone.AccountNo = dt.Rows[0]["AccountNo"].ToString();
                     _GetApplicationRespone.ApplicationStatusID = dt.Rows[0]["ApplicationStatusID"].ToString();
                     _GetApplicationRespone.ApplicationCode = dt.Rows[0]["ApplicationCode"].ToString();
                     _GetApplicationRespone.ApplicationID = dt.Rows[0]["ApplicationID"].ToString();
 
+                    _GetApplicationRespone.ProductSerialNo = dt.Rows[0]["ProductSerialNo"].ToString();
 
-                    _GetApplicationRespone.SaleDepCode = dt.Rows[0]["SaleDepCode"].ToString();
                     _GetApplicationRespone.SaleDepName = dt.Rows[0]["SaleDepName"].ToString();
                     _GetApplicationRespone.ProductModelName = dt.Rows[0]["ProductModelName"].ToString();
-                    _GetApplicationRespone.ProductSerialNo = dt.Rows[0]["ProductSerialNo"].ToString();
-                    _GetApplicationRespone.applicationstatusid = dt.Rows[0]["applicationstatusid"].ToString();
 
+                    _GetApplicationRespone.ProductBrandName = dt.Rows[0]["ProductBrandName"].ToString();
+                    
+
+                    _GetApplicationRespone.CustomerID = dt.Rows[0]["CustomerID"].ToString();
+                    _GetApplicationRespone.Cusname = dt.Rows[0]["Cusname"].ToString();
+                    _GetApplicationRespone.cusMobile = dt.Rows[0]["cusMobile"].ToString();
+                    _GetApplicationRespone.SaleName = dt.Rows[0]["SaleName"].ToString();
+                    _GetApplicationRespone.SaleTelephoneNo = dt.Rows[0]["SaleTelephoneNo"].ToString();
+                    
                 }
                 else
                 {
                     _GetApplicationRespone.statusCode = "Not Found";
                 }
 
-                Log.Debug(JsonConvert.SerializeObject(_GetApplicationRespone));
+                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_GetApplicationRespone));
 
                 sqlCommand.Parameters.Clear();
-                connection.Close();
+                
                 return _GetApplicationRespone;
             }
             catch (Exception ex)
             {
                 _GetApplicationRespone.statusCode = "FAIL";
-                Log.Debug("GetApplication FAIL : " + ex.Message);
+                Log.Debug("RETURN : " + ex.Message);
                 return _GetApplicationRespone;
             }
 
+        }
+
+        [HttpPost]
+        public async Task<MessageReturn> GetStatusClosedSGFinance([FromBody] C100StatusRq _C100StatusRq)
+        {
+            Log.Debug(JsonConvert.SerializeObject(_C100StatusRq));
+            string ResultDescription = "";
+            MessageReturn _MessageReturn = new MessageReturn();
+            try
+            {
+
+                SqlConnection connection = new SqlConnection();
+                connection.ConnectionString = strConnString;
+                connection.Open();
+                SqlCommand sqlCommand;
+                string strSQL = DATABASEK2 + ".[dbo].[GetStatusClosedSGFinance]";
+                sqlCommand = new SqlCommand(strSQL, connection);
+                sqlCommand.CommandType = CommandType.StoredProcedure;
+                sqlCommand.Parameters.AddWithValue("ApplicationCode", _C100StatusRq.ApplicationCode);
+
+                SqlDataAdapter dtAdapter = new SqlDataAdapter();
+                dtAdapter.SelectCommand = sqlCommand;
+                DataTable dt = new DataTable();
+                dtAdapter.Fill(dt);
+                connection.Close();
+                sqlCommand.Parameters.Clear();
+
+                if (dt.Rows.Count > 0)
+                {
+                    Log.Debug(JsonConvert.SerializeObject(dt));
+
+                    requestBodyValue _requestBodyValue = JsonConvert.DeserializeObject<requestBodyValue>(dt.Rows[0]["StatusDesc"].ToString());
+
+                    var requestBody = new
+                    {
+                        applicationCode = _requestBodyValue.applicationCode,
+                        applicationStatus = _requestBodyValue.applicationStatus,
+                        approvalStatus = _requestBodyValue.approvalStatus,
+                        approvalDatetime = _requestBodyValue.approvalDatetime,
+                        remark = _requestBodyValue.remark
+                    };
+
+                    Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody));
+
+                    using (HttpClient client = new HttpClient())
+                    {
+                        string jsonBody = JsonConvert.SerializeObject(requestBody);
+
+                        client.DefaultRequestHeaders.Add("apikey", ApiKey);
+                        client.DefaultRequestHeaders.Add("user", "DEV");
+
+                        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                        HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG+ "/Service/C100_Status", content);
+                        int DeviceStatusCode = (int)responseDevice.StatusCode;
+
+                        Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+
+                        if (responseDevice.IsSuccessStatusCode)
+                        {
+                            var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
+
+                            _MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
+                        }
+                    }
+                }
+
+                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
+                return _MessageReturn;
+            }
+            catch (Exception ex)
+            {
+                _MessageReturn.StatusCode = "500";
+                _MessageReturn.Message = ex.Message;
+
+                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
+
+                return _MessageReturn;
+            }
+        }
+
+        [HttpPost]
+        public async Task<MessageReturn> GenEsignature([FromBody] C100StatusRq _C100StatusRq)
+        {
+            Log.Debug(JsonConvert.SerializeObject(_C100StatusRq));
+            MessageReturn _MessageReturn = new MessageReturn();
+            try
+            {
+
+                var requestBody = new
+                {
+                    APPLICATION_CODE = _C100StatusRq.ApplicationCode
+                };
+
+                using (HttpClient client = new HttpClient())
+                {
+                    string jsonBody = JsonConvert.SerializeObject(requestBody);
+
+                    client.DefaultRequestHeaders.Add("apikey", ApiKey);
+                    client.DefaultRequestHeaders.Add("user", "DEV");
+
+                    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/api/v2/GenEsignature", content);
+                    int DeviceStatusCode = (int)responseDevice.StatusCode;
+
+                    Log.Debug("API RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+
+                    if (responseDevice.IsSuccessStatusCode)
+                    {
+                        var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
+
+                        _MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
+                    }
+                }
+
+                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
+                return _MessageReturn;
+            }
+            catch (Exception ex)
+            {
+                _MessageReturn.StatusCode = "500";
+                _MessageReturn.Message = ex.Message;
+                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
+                return _MessageReturn;
+            }
+        }
+
+        [HttpPost]
+        public async Task<MessageReturn> GetAddTNewSalesNewSGFinance([FromBody] C100StatusRq _C100StatusRq)
+        {
+            Log.Debug(JsonConvert.SerializeObject(_C100StatusRq));
+            MessageReturn _MessageReturn = new MessageReturn();
+            GetOuCodeRespone _GetOuCodeRespone = new GetOuCodeRespone();
+            try
+            {
+
+                    var requestBody = new
+                    {
+                        APPLICATION_CODE = _C100StatusRq.ApplicationCode
+                    };
+
+                    Log.Debug("API REQUEST : " + JsonConvert.SerializeObject(requestBody));
+
+
+                    using (HttpClient client = new HttpClient())
+                    {
+                        string jsonBody = JsonConvert.SerializeObject(requestBody);
+
+                        client.DefaultRequestHeaders.Add("apikey", ApiKey);
+                        client.DefaultRequestHeaders.Add("user", "DEV");
+
+                        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+
+                        HttpResponseMessage responseDevice;
+
+                        responseDevice = await client.PostAsync(SGAPIESIG + "/SubmitSale", content);
+
+
+                        int DeviceStatusCode = (int)responseDevice.StatusCode;
+
+                        Log.Debug("API RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+
+                        if (responseDevice.IsSuccessStatusCode)
+                        {
+                            var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
+
+                            _MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
+                        }
+                    }
+                //}
+                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
+                return _MessageReturn;
+            }
+            catch (Exception ex)
+            {
+                _MessageReturn.StatusCode = "500";
+                _MessageReturn.Message = ex.Message;
+                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
+                return _MessageReturn;
+            }
+        }
+
+        public async Task<RegisIMEIRespone> RegisIMEI([FromBody] GetApplication _GetApplication)
+        {
+            RegisIMEIRespone _RegisIMEIRespone = new RegisIMEIRespone();
+            try
+            {
+                GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
+
+                var requestBody = new
+                {
+                    SerrialNo = _GetApplicationRespone.ProductSerialNo,
+                    APPLICATION_CODE = _GetApplicationRespone.ApplicationCode,
+                    Brand = _GetApplicationRespone.ProductBrandName
+                };
+
+                using (HttpClient client = new HttpClient())
+                {
+                    string jsonBody = JsonConvert.SerializeObject(requestBody);
+
+                    client.DefaultRequestHeaders.Add("apikey", ApiKey);
+                    client.DefaultRequestHeaders.Add("user", "DEV");
+
+                    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/Service/RegisIMEI", content);
+                    int DeviceStatusCode = (int)responseDevice.StatusCode;
+                    Log.Debug("API RETURN : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+                    if (responseDevice.IsSuccessStatusCode)
+                    {
+                        var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
+
+                        _RegisIMEIRespone = JsonConvert.DeserializeObject<RegisIMEIRespone>(jsonResponseDevice);
+                    }
+                }
+
+                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_RegisIMEIRespone));
+                return _RegisIMEIRespone;
+            }
+            catch (Exception ex)
+            {
+                _RegisIMEIRespone.statusCode = ex.Message;
+                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_RegisIMEIRespone));
+                return _RegisIMEIRespone;
+            }
         }
 
         public class FormData

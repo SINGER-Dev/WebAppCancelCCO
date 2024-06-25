@@ -5,23 +5,114 @@
 
 @using (Html.BeginForm("Search", "Home", FormMethod.Post, new { id = "searchForm" }))
 {   
-    <div class="mb-3 row">
-        <label for="AccountNo" class="col-sm-2 col-form-label">บัญชีเลขที่</label>
-        <div class="col-sm-10">
-            <input type="text" class="form-control" id="AccountNo" name="AccountNo" placeholder="บัญชีเลขที่">
+     <div class="mb-2 row">
+
+        <div class="col-sm-4">
+
+            <div data-mdb-input-init class="form-outline mb-3">
+                <input type="text" id="ApplicationCode" name="ApplicationCode" class="form-control form-control-lg"
+                       placeholder="เลขที่ใบคำขอ" />
+                <label class="form-label" for="form3Example3">เลขที่ใบคำขอ</label>
+            </div>
+
         </div>
-    </div>
-    <div class="mb-3 row">
-        <label for="ApplicationCode" class="col-sm-2 col-form-label">เลขที่ใบคำขอ</label>
-        <div class="col-sm-10">
-            <input type="text" class="form-control" id="ApplicationCode" name="ApplicationCode" placeholder="เลขที่ใบคำขอ">
+
+
+        <div class="col-sm-4">
+
+            <div data-mdb-input-init class="form-outline mb-3">
+                <input type="text" id="AccountNo" name="AccountNo" class="form-control form-control-lg"
+                       placeholder="เลขที่สัญญา" />
+                <label class="form-label" for="form3Example3">เลขที่สัญญา</label>
+            </div>
+
         </div>
+
+        <div class="col-sm-4">
+
+            <div data-mdb-input-init class="form-outline mb-3">
+                <input type="text" id="ProductSerialNo" name="ProductSerialNo" class="form-control form-control-lg"
+                       placeholder="Serial / IMEI" />
+                <label class="form-label" for="form3Example3">Serial / IMEI</label>
+            </div>
+
+        </div>
+
     </div>
 
+    <div class="mb-2 row">
+
+        <div class="col-sm-4">
+            <div data-mdb-input-init class="form-outline mb-3">
+                <input type="text" id="CustomerName" name="CustomerName" class="form-control form-control-lg"
+                       placeholder="ชื่อลูกค้า" />
+                <label class="form-label" for="form3Example3">ชื่อลูกค้า</label>
+            </div>
+        </div>
+
+        
+
+        <div class="col-sm-4">
+            <div data-mdb-input-init class="form-outline mb-3">
+                <input type="text" id="CustomerID" name="CustomerID" class="form-control form-control-lg"
+                       placeholder="CustomerID" />
+                <label class="form-label" for="form3Example3">CustomerID</label>
+            </div>
+        </div>
+
+        <div class="col-sm-4">
+            <div class="form-floating">
+                <select class="form-select" name="status" id="status" aria-label="สถานะ">
+                    <option value="">เลือกสถานะทั้งหมด</option>
+                    <option value="CLOSING">CLOSING</option>
+                    <option value="CLOSED">CLOSED</option>
+                    <option value="CANCELLED">CANCELLED</option>
+                </select>
+            </div>
+        </div>
+
+       
+
+    </div>
+
+    <div class="mb-2 row">
+
+
+        <div class="col-sm-4">
+            <div class="form-floating">
+                <select class="form-select" name="StatusRegis" id="StatusRegis" aria-label="สถานะลงทะเบียน">
+                    <option value="">เลือกสถานะลงทะเบียนทั้งหมด</option>
+                    <option value="0">รอลงทะเบียน</option>
+                    <option value="1">ลงทะเบียนเรียบร้อย</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="col-sm-4">
+
+            <div data-mdb-input-init class="form-outline mb-3">
+                <input type="text" id="startdate" name="startdate" class="date form-control form-control-lg active"
+                       placeholder="วันที่เริ่มต้น" autocomplete="off" />
+                <label class="form-label" for="form3Example3">วันที่เริ่มต้น</label>
+            </div>
+
+        </div>
+
+        <div class="col-sm-4">
+
+            <div data-mdb-input-init class="form-outline mb-3">
+                <input type="text" id="enddate" name="enddate" class="date form-control form-control-lg active"
+                       placeholder="วันที่สิ้นสุด" autocomplete="off" />
+                <label class="form-label" for="form3Example3">วันที่สิ้นสุด</label>
+            </div>
+
+        </div>
+    </div>
+ 
+
     <div class="mb-3 row">
-    <label for="inputPassword" class="col-sm-2 col-form-label"></label>
         <div class="col-sm-10">
-            <button type="submit" class="btn btn-primary mb-3">ค้นหา</button>
+            <button type="submit" class="btn btn-primary mb-3" id="BtnsearchResults">ค้นหา</button>
         </div>
     </div>
 }
@@ -32,3 +123,4 @@
     </div>
 </div>
 <div id="searchResults"></div>
+
