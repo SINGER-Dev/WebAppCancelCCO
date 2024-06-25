@@ -1,4 +1,6 @@
-﻿namespace App.Models
+﻿using System.Reflection.Emit;
+
+namespace App.Models
 {
     public class ApplicationResponeModel
     {
@@ -30,6 +32,8 @@
         public string cusMobile { get; set; }
         public string LINE_STATUS { get; set; }
         public string RefCode { get; set; }
+        public string? OU_Code { get; set; }
+        public string? loanTypeCate { get; set; }
     }
 
 

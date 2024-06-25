@@ -144,8 +144,11 @@
                                 <B>ลงทะเบียนเครื่อง : </B>
 
                                 <span class="badge bg-warning" style="color:#000">@result.numregis</span>
-
-                                @if (result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว")
+                                @if (result.OU_Code == "STL" && result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว")
+                                {
+                                    <i class="RegisIMEI fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
+                                }
+                                else if (result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว" && result.newnum == "เรียบร้อย" && result.paynum == "เรียบร้อย")
                                 {
                                     <i class="RegisIMEI fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
                                 }
@@ -165,7 +168,7 @@
                                 <B>NewSale : </B>
 
                                 <span class="badge bg-warning" style="color:#000">@result.newnum</span>
-                                @if (result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว")
+                                @if (result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว" && result.newnum != "เรียบร้อย" && result.paynum != "เรียบร้อย" && result.OU_Code == "STL")
                                 {
                                     <i class="GetAddTNewSalesNewSGFinance fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
                                 }

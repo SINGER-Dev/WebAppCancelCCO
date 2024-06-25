@@ -11,6 +11,7 @@ using System.Text;
 using RestSharp;
 using System.Globalization;
 using Microsoft.AspNetCore.Http;
+using System.Reflection.Emit;
 
 namespace App.Controllers
 {
@@ -228,7 +229,15 @@ namespace App.Controllers
                         _ApplicationResponeModel.SaleName = row["SaleName"].ToString();
                         _ApplicationResponeModel.LINE_STATUS = row["LINE_STATUS"].ToString();
                         _ApplicationResponeModel.RefCode = row["RefCode"].ToString();
+
+                        _ApplicationResponeModel.OU_Code = row["OU_Code"].ToString();
+                        _ApplicationResponeModel.loanTypeCate = row["loanTypeCate"].ToString();
+
                         
+
+
+
+
                         string datenowText = DateTime.Now.ToString("yyyy-MM-dd", new CultureInfo("en-US"));
 
                         if (row["ApplicationDate"].ToString() == datenowText)
