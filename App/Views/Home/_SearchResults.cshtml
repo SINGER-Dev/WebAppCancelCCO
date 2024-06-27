@@ -26,10 +26,10 @@
                     <tr>
                         <td>
 
-                            @if (@result.datenowcheck == "1")
-                            {
+                            @* @if (@result.datenowcheck == "1")
+                            { *@
                                 <i class="fa-solid fa-folder-open" onclick="location.href = '@Url.Action("FormCancel", "Home", new { ApplicationCode = @result.ApplicationCode })'" style="color: #B197FC;cursor:pointer"></i>
-                            }
+                            @* } *@
                            
                         
                         </td>
@@ -168,7 +168,7 @@
                                 <B>NewSale : </B>
 
                                 <span class="badge bg-warning" style="color:#000">@result.newnum</span>
-                                @if (result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว" && result.newnum != "เรียบร้อย" && result.paynum != "เรียบร้อย" && result.OU_Code == "STL")
+                                @if (result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว" && result.newnum != "เรียบร้อย" && result.paynum != "เรียบร้อย" && result.OU_Code != "STL")
                                 {
                                     <i class="GetAddTNewSalesNewSGFinance fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
                                 }
