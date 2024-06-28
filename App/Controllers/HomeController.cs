@@ -282,8 +282,8 @@ namespace App.Controllers
                 // Check if the current time is within the period
                 bool isWithinPeriod = currentTime >= periodStart && currentTime <= periodEnd;
 
-                if (isWithinPeriod)
-                {
+                //if (isWithinPeriod)
+                //{
                     SqlConnection connection = new SqlConnection();
                     connection.ConnectionString = strConnString;
                     connection.Open();
@@ -361,11 +361,11 @@ namespace App.Controllers
                             }
                         }
                     }
-                }
-                else
-                {
-                    ResultDescription = "ไม่สามารถยกเลิกรายการได้ เนื่องจากเลยกำหนดเวลาการยกเลิกแล้ว";
-                }
+                //}
+                //else
+                //{
+                //    ResultDescription = "ไม่สามารถยกเลิกรายการได้ เนื่องจากเลยกำหนดเวลาการยกเลิกแล้ว";
+                //}
                 return ResultDescription;
             }
             catch(Exception ex)
