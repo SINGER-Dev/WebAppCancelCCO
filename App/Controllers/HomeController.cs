@@ -190,6 +190,7 @@ namespace App.Controllers
                 sqlCommand.Parameters.AddWithValue("enddate", _ApplicationModel.enddate);
                 sqlCommand.Parameters.AddWithValue("CustomerName", _ApplicationModel.CustomerName);
                 sqlCommand.Parameters.AddWithValue("StatusRegis", _ApplicationModel.StatusRegis);
+                sqlCommand.Parameters.AddWithValue("loanTypeCate", _ApplicationModel.loanTypeCate);
                 
                 SqlDataAdapter dtAdapter = new SqlDataAdapter();
                 dtAdapter.SelectCommand = sqlCommand;

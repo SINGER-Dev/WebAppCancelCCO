@@ -1,16 +1,7 @@
 {
   "Version": 1,
   "WorkspaceRootPath": "D:\\project\\WebAppCancelCCO\\",
-  "Documents": [
-    {
-      "AbsoluteMoniker": "D:0:0:{F68F1CC0-7E95-4C5B-8AED-AD0152E0D290}|App\\App.csproj|d:\\project\\webappcancelcco\\app\\controllers\\homecontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{F68F1CC0-7E95-4C5B-8AED-AD0152E0D290}|App\\App.csproj|solutionrelative:app\\controllers\\homecontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{F68F1CC0-7E95-4C5B-8AED-AD0152E0D290}|App\\App.csproj|d:\\project\\webappcancelcco\\app\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
-      "RelativeMoniker": "D:0:0:{F68F1CC0-7E95-4C5B-8AED-AD0152E0D290}|App\\App.csproj|solutionrelative:app\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
-    }
-  ],
+  "Documents": [],
   "DocumentGroupContainers": [
     {
       "Orientation": 0,
@@ -18,7 +9,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 224,
-          "SelectedChildIndex": 4,
+          "SelectedChildIndex": -1,
           "Children": [
             {
               "$type": "Bookmark",
@@ -31,32 +22,6 @@
             {
               "$type": "Bookmark",
               "Name": "ST:128:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "appsettings.json",
-              "DocumentMoniker": "D:\\project\\WebAppCancelCCO\\App\\appsettings.json",
-              "RelativeDocumentMoniker": "App\\appsettings.json",
-              "ToolTip": "D:\\project\\WebAppCancelCCO\\App\\appsettings.json",
-              "RelativeToolTip": "App\\appsettings.json",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2024-06-28T09:56:28.384Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "HomeController.cs",
-              "DocumentMoniker": "D:\\project\\WebAppCancelCCO\\App\\Controllers\\HomeController.cs",
-              "RelativeDocumentMoniker": "App\\Controllers\\HomeController.cs",
-              "ToolTip": "D:\\project\\WebAppCancelCCO\\App\\Controllers\\HomeController.cs",
-              "RelativeToolTip": "App\\Controllers\\HomeController.cs",
-              "ViewState": "AQIAAI4CAAAAAAAAAAAmwJgCAAAlAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2024-06-28T01:45:07.01Z",
-              "EditorCaption": ""
             }
           ]
         }

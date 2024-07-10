@@ -59,7 +59,7 @@ namespace App.Models
         public string enddate { get; set; }
         public string CustomerName { get; set; }
         public string StatusRegis { get; set; }
-        
+        public string loanTypeCate { get; set; }
     }
 
     public class SearchGetApplicationHistory
