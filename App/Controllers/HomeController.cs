@@ -42,8 +42,9 @@ namespace App.Controllers
             ApiKey = builder.GetConnectionString("ApiKey");
             SGAPIESIG = builder.GetConnectionString("SGAPIESIG");
 
-
+            
         }
+
 
         public IActionResult Index()
         {
@@ -109,6 +110,12 @@ namespace App.Controllers
         [HttpPost]
         public ActionResult SearchGetApplicationHistory(SearchGetApplicationHistory _SearchGetApplicationHistory)
         {
+            var EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            if (EMP_CODE == null)
+            {
+                return Redirect("/Login");
+            }
+
             Log.Debug(JsonConvert.SerializeObject(_SearchGetApplicationHistory));
 
             List<SearchGetApplicationHistoryRespone> _SearchGetApplicationHistoryResponeMaster = new List<SearchGetApplicationHistoryRespone>();
@@ -376,6 +383,118 @@ namespace App.Controllers
             }
 
             
+        }
+
+        [HttpPost]
+        public async Task<string> UpdateDataCancelCLOSED(FormConfirmModel _FormConfirmModel)
+        {
+            string ResultDescription = "";
+            try
+            {
+
+
+                // Define the start and end times for the period (8:00 AM - 10:00 PM)
+                TimeSpan periodStart = new TimeSpan(8, 0, 0); // 8:00 AM
+                TimeSpan periodEnd = new TimeSpan(22, 0, 0); // 10:00 PM
+
+                // Example time to check
+                DateTime now = DateTime.Now;
+                TimeSpan currentTime = now.TimeOfDay;
+
+                // Check if the current time is within the period
+                bool isWithinPeriod = currentTime >= periodStart && currentTime <= periodEnd;
+
+                //if (isWithinPeriod)
+                //{
+                SqlConnection connection = new SqlConnection();
+                connection.ConnectionString = strConnString;
+                connection.Open();
+
+                GetApplication _GetApplication = new GetApplication();
+                _GetApplication.ApplicationCode = _FormConfirmModel.ApplicationCode;
+                GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
+
+                //Cancel Application
+                //CCOWebServiceModel _CCOWebService = new CCOWebServiceModel();
+                //_CCOWebService.id = _GetApplicationRespone.ApplicationID;
+                //MessageModel _MessageModel = await CCOWebService(_CCOWebService);
+
+                //Cancel EZ Tax
+                //GetTokenEZTaxRp _GetTokenEZTaxRp = await GetTokenEZTax();
+
+                //Cancel econtract
+
+
+                SqlCommand sqlCommand;
+                string strSQL = DATABASEK2 + ".[dbo].[CancelApplication_CLOSED]";
+                sqlCommand = new SqlCommand(strSQL, connection);
+                sqlCommand.CommandType = CommandType.StoredProcedure;
+                sqlCommand.Parameters.AddWithValue("ApplicationCode", _GetApplicationRespone.ApplicationCode);
+                sqlCommand.Parameters.AddWithValue("Remark", _FormConfirmModel.Remark + "" + _FormConfirmModel.Other);
+                sqlCommand.Parameters.AddWithValue("CANCEL_USER", HttpContext.Session.GetString("EMP_CODE"));
+
+                SqlDataAdapter dtAdapter = new SqlDataAdapter();
+                dtAdapter.SelectCommand = sqlCommand;
+                DataTable dt = new DataTable();
+                dtAdapter.Fill(dt);
+                connection.Close();
+                if (dt.Rows.Count > 0)
+                {
+                    if ("SUCCESS" != dt.Rows[0]["Result"].ToString().ToUpper())
+                    {
+                        ResultDescription += _GetApplicationRespone.AccountNo + " " + dt.Rows[0]["ResultDescription"].ToString();
+                    }
+                }
+                sqlCommand.Parameters.Clear();
+
+                if (ResultDescription == "")
+                {
+                    string currentDateTime = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+                    var requestBody = new
+                    {
+                        applicationCode = _GetApplicationRespone.ApplicationCode,
+                        applicationStatus = "CANCELLED",
+                        approvalStatus = "CANCELLED",
+                        approvalDatetime = currentDateTime,
+                        remark = _FormConfirmModel.Remark + "" + _FormConfirmModel.Other
+                    };
+
+                    Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody));
+
+                    using (HttpClient client = new HttpClient())
+                    {
+                        string jsonBody = JsonConvert.SerializeObject(requestBody);
+
+                        client.DefaultRequestHeaders.Add("apikey", ApiKey);
+                        client.DefaultRequestHeaders.Add("user", "DEV");
+
+                        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                        HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/Service/C100_Status", content);
+                        int DeviceStatusCode = (int)responseDevice.StatusCode;
+
+                        Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+
+                        if (responseDevice.IsSuccessStatusCode)
+                        {
+                            var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
+
+                        }
+                    }
+                }
+                //}
+                //else
+                //{
+                //    ResultDescription = "ไม่สามารถยกเลิกรายการได้ เนื่องจากเลยกำหนดเวลาการยกเลิกแล้ว";
+                //}
+                return ResultDescription;
+            }
+            catch (Exception ex)
+            {
+                ResultDescription = ex.Message;
+                return ResultDescription;
+            }
+
+
         }
 
         protected HttpWebRequest CreateWebRequest(string url)
@@ -704,6 +823,7 @@ namespace App.Controllers
         [HttpPost]
         public async Task<MessageReturn> GetAddTNewSalesNewSGFinance([FromBody] C100StatusRq _C100StatusRq)
         {
+
             Log.Debug(JsonConvert.SerializeObject(_C100StatusRq));
             MessageReturn _MessageReturn = new MessageReturn();
             GetOuCodeRespone _GetOuCodeRespone = new GetOuCodeRespone();
@@ -798,6 +918,17 @@ namespace App.Controllers
                 Log.Debug("RETURN : " + JsonConvert.SerializeObject(_RegisIMEIRespone));
                 return _RegisIMEIRespone;
             }
+        }
+
+        [HttpGet("CheckSession")]
+        public IActionResult CheckSession()
+        {
+            if (HttpContext.Session.GetString("EMP_CODE") == null)
+            {
+                return Unauthorized();
+            }
+
+            return Ok();
         }
 
         public class FormData

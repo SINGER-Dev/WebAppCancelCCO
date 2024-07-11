@@ -86,8 +86,8 @@
 
     <div class="col-12">
         <label for="Remark" class="form-label">เหตุผล  <span style="color:red">*</span></label>
-        <select class="form-control" id="Remark" name="Remark">
-            <option>กรุณาเลือกเหตุผลการยกเลิก</option>
+        <select class="form-control" id="Remark" name="Remark" required>
+            <option value="">กรุณาเลือกเหตุผลการยกเลิก</option>
             <option value="กรอก  Serial No / IMEI  ผิด">กรอก  Serial No / IMEI  ผิด</option>
             <option value="ส่วนลดผิด">ส่วนลดผิด</option>
             <option value="รุ่น/สี ผิด">รุ่น/สี ผิด</option>
@@ -120,6 +120,12 @@
         </div>
     </div>
     <div class="col-12">
-        <button type="submit" class="btn btn-primary" id="btnFetch">ยืนยันการยกเลิกใบคำขอ</button>
+        <button type="button" class="btn btn-primary" id="btnFetch">ยืนยันการยกเลิกใบคำขอ</button>
+        
+        @if (@ViewBag.EMP_CODE == "23956428")
+        {
+            <button type="button" class="btn btn-danger" id="btnFetch2">ยืนยันการยกเลิกใบคำขอแบบข้ามวัน</button>
+        }
+
     </div>
 </form>
