@@ -7,6 +7,7 @@ D:\project\WebAppCancelCCO\App\obj\Release\net8.0\PubTmp\Out\App.runtimeconfig.j
 D:\project\WebAppCancelCCO\App\obj\Release\net8.0\PubTmp\Out\App.pdb
 D:\project\WebAppCancelCCO\App\obj\Release\net8.0\PubTmp\Out\Azure.Core.dll
 D:\project\WebAppCancelCCO\App\obj\Release\net8.0\PubTmp\Out\Azure.Identity.dll
+D:\project\WebAppCancelCCO\App\obj\Release\net8.0\PubTmp\Out\Dapper.dll
 D:\project\WebAppCancelCCO\App\obj\Release\net8.0\PubTmp\Out\Microsoft.Bcl.AsyncInterfaces.dll
 D:\project\WebAppCancelCCO\App\obj\Release\net8.0\PubTmp\Out\Microsoft.Data.SqlClient.dll
 D:\project\WebAppCancelCCO\App\obj\Release\net8.0\PubTmp\Out\Microsoft.Extensions.DependencyModel.dll

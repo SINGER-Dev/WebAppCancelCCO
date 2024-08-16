@@ -108,10 +108,31 @@
                             {
                                 <span class="badge bg-warning" style="color:#000">@result.signedStatus</span>
                             }
-                            @if (result.ApplicationStatusID == "CLOSING" && result.statusReceived != "รับสินค้าแล้ว")
+
+                            @if ("LOCKPHONE" == result.loanTypeCate.ToString().Trim() && "SGC" == result.OU_Code.ToString().Trim())
                             {
-                                <i class="GenEsignature fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
+                                @if (result.ApplicationStatusID == "CLOSING" && result.signedStatus == "รอลงนาม" && result.ProductSerialNo.Trim() != "")
+                                {
+                                    <i class="GenEsignature fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
+                                }
                             }
+
+                            @if ("LOCKPHONE" == result.loanTypeCate.ToString().Trim() && "STL" == result.OU_Code.ToString().Trim())
+                            {
+                                @if (result.ApplicationStatusID == "CLOSING" && result.signedStatus == "รอลงนาม" && result.ProductSerialNo.Trim() != "" && result.Ref4.Trim() != "")
+                                {
+                                    <i class="GenEsignature fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
+                                }
+                            }
+
+                            @if ("HP" == result.loanTypeCate.ToString().Trim() && "STL" == result.OU_Code.ToString().Trim())
+                            {
+                                @if (result.ApplicationStatusID == "CLOSING" && result.signedStatus == "รอลงนาม" && result.ProductSerialNo.Trim() != "" && result.Ref4.Trim() != "")
+                                {
+                                    <i class="GenEsignature fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
+                                }
+                            }
+
                             <br>
 
 

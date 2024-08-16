@@ -78,3 +78,4 @@ D:\project\WebAppCancelCCO\App\bin\Debug\net8.0\Serilog.Sinks.Console.dll
 D:\project\WebAppCancelCCO\App\bin\Debug\net8.0\Serilog.Sinks.Debug.dll
 D:\project\WebAppCancelCCO\App\bin\Debug\net8.0\Serilog.Sinks.File.dll
 D:\project\WebAppCancelCCO\App\bin\Debug\net8.0\RestSharp.dll
+D:\project\WebAppCancelCCO\App\bin\Debug\net8.0\Dapper.dll
