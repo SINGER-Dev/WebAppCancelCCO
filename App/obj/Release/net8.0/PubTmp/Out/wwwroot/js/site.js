@@ -41,7 +41,13 @@
                     $('#searchResults').html(result); // Update search results
                     const dt = $('#example').DataTable({
                         scrollX: true,
-                        "bSort": false
+                        pageLength: 5,
+                        lengthMenu: [[5, 10, 20, -1], [5, 10, 20, 'Todos']],
+                        layout: {
+                            topStart: 'pageLength',
+                            top: 'buttons',
+                            topEnd: 'search'
+                        }
                     });
 
                 },
@@ -450,7 +456,12 @@
                 const dt = $('#example').DataTable({
                     scrollX: true,
                     pageLength: 5,
-                    lengthMenu: [[5, 10, 20, -1], [5, 10, 20, 'Todos']]
+                    lengthMenu: [[5, 10, 20, -1], [5, 10, 20, 'Todos']],
+                    layout: {
+                        topStart: 'pageLength',
+                        top: 'buttons',
+                        topEnd: 'search'
+                    }
                 });
             },
             error: function (xhr, status, error) {
