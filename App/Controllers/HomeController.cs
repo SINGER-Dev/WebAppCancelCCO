@@ -204,7 +204,7 @@ namespace App.Controllers
                     a.AccountNo,
                     a.SaleDepCode,
                     a.SaleDepName,
-                    CONVERT(NVARCHAR, a.ApplicationDate, 23) AS ApplicationDate,
+                    CONVERT(NVARCHAR, a.ApplicationDate, 20) AS ApplicationDate,
                     CONVERT(NVARCHAR, a.ApplicationDate, 20) AS ApplicationDate2,
                     a.ProductID,
                     a.ProductModelName,
@@ -213,22 +213,22 @@ namespace App.Controllers
                     cus.MobileNo1 AS CusMobile,
                     a.SaleName,
                     a.SaleTelephoneNo,
-                    CASE 
+                     ISNULL(CASE 
                         WHEN EXISTS (SELECT 1 FROM {SGDIRECT}.[AUTO_SALE_POS_SERIAL] s WITH (NOLOCK)
                                      WHERE s.AppOrderNo = a.ApplicationCode) 
                         THEN (SELECT STUFF((SELECT ', ' + s.ItemSerial
                                             FROM {SGDIRECT}.[AUTO_SALE_POS_SERIAL] s WITH (NOLOCK)
                                             WHERE s.AppOrderNo = a.ApplicationCode
                                             FOR XML PATH('')), 1, 1, ''))
-                        ELSE a.ProductSerialNo 
-                    END AS ProductSerialNo,
+                        ELSE a.ProductSerialNo
+                    END,'') AS ProductSerialNo,
                     a.ApplicationStatusID,
                     CASE 
                         WHEN con.signedStatus = 'COMP-Done' THEN 'เรียบร้อย' 
                         WHEN con.signedStatus = 'Initial' THEN 'รอลงนาม'
                         WHEN ISNULL(con.signedStatus, 'NULL') = 'NULL' THEN '-'
                         ELSE con.signedStatus 
-                    END AS SignedStatus,
+                    END AS signedStatus,
                     CASE WHEN ISNULL(con.statusReceived, '0') = '1' THEN 'รับสินค้าแล้ว' ELSE 'ยังไม่รับสินค้า' END AS StatusReceived,
                     CASE WHEN ISNULL(c.ESIG_CONFIRM_STATUS, '0') = '1' THEN 'เรียบร้อย' ELSE 'รอลงนาม' END AS ESIG_CONFIRM_STATUS,
                     CASE WHEN ISNULL(c.RECEIVE_FLAG, '0') = '1' THEN 'รับสินค้าแล้ว' ELSE 'รอลงนาม' END AS RECEIVE_FLAG,
@@ -327,7 +327,10 @@ namespace App.Controllers
                         StatusRegis = _ApplicationModel.StatusRegis
                     };
 
-                    var applications = connection.Query<ApplicationResponeModel>(sql, parameters);
+                    var commandDefinition = new CommandDefinition(sql, parameters, commandTimeout: 300); // Timeout in seconds
+
+
+                    var applications = connection.Query<ApplicationResponeModel>(commandDefinition);
 
                     foreach (var application in applications)
                     {

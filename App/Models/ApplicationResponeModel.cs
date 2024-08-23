@@ -11,7 +11,7 @@ namespace App.Models
         public string DepartmentID { get; set; }
         public string CustomerID { get; set; }
         public string ProductModelName { get; set; }
-        public string ProductSerialNo { get; set; }
+        public string? ProductSerialNo { get; set; }
         public string CreateDate { get; set; }
         public string ApplicationStatusID { get; set; }
         public string SaleDepCode { get; set; }

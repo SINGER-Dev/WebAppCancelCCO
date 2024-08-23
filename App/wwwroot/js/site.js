@@ -43,6 +43,7 @@
                         scrollX: true,
                         pageLength: 5,
                         lengthMenu: [[5, 10, 20, -1], [5, 10, 20, 'Todos']],
+                        buttons: ['excel'],
                         layout: {
                             topStart: 'pageLength',
                             top: 'buttons',
@@ -457,6 +458,7 @@
                     scrollX: true,
                     pageLength: 5,
                     lengthMenu: [[5, 10, 20, -1], [5, 10, 20, 'Todos']],
+                    buttons: ['excel'],
                     layout: {
                         topStart: 'pageLength',
                         top: 'buttons',
