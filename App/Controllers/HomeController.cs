@@ -17,7 +17,7 @@ namespace App.Controllers
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
-        string strConnString, DATABASEK2, WSCANCEL, UrlEztax, UsernameEztax, PasswordEztax, ClientIdEztax, ApiKey, SGAPIESIG, SGDIRECT, SGCESIGNATURE, SGCROSSBANK;
+        string strConnString, DATABASEK2, WSCANCEL, UrlEztax, UsernameEztax, PasswordEztax, ClientIdEztax, ApiKey, SGAPIESIG, SGDIRECT, SGCESIGNATURE, SGCROSSBANK, strConnString2;
                     
         public HomeController(ILogger<HomeController> logger)
         {
@@ -44,6 +44,7 @@ namespace App.Controllers
             SGDIRECT = builder.GetConnectionString("SGDIRECT");
             SGCESIGNATURE = builder.GetConnectionString("SGCESIGNATURE");
             SGCROSSBANK = builder.GetConnectionString("SGCROSSBANK");
+            strConnString2 = builder.GetConnectionString("strConnString2");
 
         }
 
@@ -224,44 +225,45 @@ namespace App.Controllers
                     END,'') AS ProductSerialNo,
                     a.ApplicationStatusID,
                     CASE 
-                        WHEN con.signedStatus = 'COMP-Done' THEN 'เรียบร้อย' 
-                        WHEN con.signedStatus = 'Initial' THEN 'รอลงนาม'
-                        WHEN ISNULL(con.signedStatus, 'NULL') = 'NULL' THEN '-'
+                        WHEN con.signedStatus = 'COMP-Done' THEN N'เรียบร้อย' 
+                        WHEN con.signedStatus = 'Initial' THEN N'รอลงนาม'
+                        WHEN ISNULL(con.signedStatus, 'NULL') = 'NULL' THEN N'-'
                         ELSE con.signedStatus 
                     END AS signedStatus,
-                    CASE WHEN ISNULL(con.statusReceived, '0') = '1' THEN 'รับสินค้าแล้ว' ELSE 'ยังไม่รับสินค้า' END AS StatusReceived,
-                    CASE WHEN ISNULL(c.ESIG_CONFIRM_STATUS, '0') = '1' THEN 'เรียบร้อย' ELSE 'รอลงนาม' END AS ESIG_CONFIRM_STATUS,
-                    CASE WHEN ISNULL(c.RECEIVE_FLAG, '0') = '1' THEN 'รับสินค้าแล้ว' ELSE 'รอลงนาม' END AS RECEIVE_FLAG,
+                    CASE WHEN ISNULL(con.statusReceived, '0') = '1' THEN N'รับสินค้าแล้ว' ELSE N'ยังไม่รับสินค้า' END AS StatusReceived,
+                    CASE WHEN ISNULL(c.ESIG_CONFIRM_STATUS, '0') = '1' THEN N'เรียบร้อย' ELSE N'รอลงนาม' END AS ESIG_CONFIRM_STATUS,
+                    CASE WHEN ISNULL(c.RECEIVE_FLAG, '0') = '1' THEN N'รับสินค้าแล้ว' ELSE N'รอลงนาม' END AS RECEIVE_FLAG,
                     a.ApprovedDate,
                     CASE 
-                        WHEN appex.loanTypeCate = 'HP' THEN 'เรียบร้อย'
-                        WHEN regis.numregis > 0 THEN 'เรียบร้อย'
-                        ELSE 'รอลงทะเบียน' 
+                        WHEN appex.loanTypeCate = 'HP' THEN N'เรียบร้อย'
+                        WHEN regis.numregis > 0 THEN N'เรียบร้อย'
+                        ELSE N'รอลงทะเบียน' 
                     END AS NumRegis,
                     CASE 
-                        WHEN c.ESIG_CONFIRM_STATUS = '1' AND con.signedStatus = 'COMP-Done' THEN 'เรียบร้อย'
-                        WHEN c.ESIG_CONFIRM_STATUS = '0' OR con.signedStatus = 'Initial' THEN 'รอลงนาม'
-                        ELSE 'ลงนามไม่สำเร็จ' 
+                        WHEN c.ESIG_CONFIRM_STATUS = '1' AND con.signedStatus = 'COMP-Done' THEN N'เรียบร้อย'
+                        WHEN c.ESIG_CONFIRM_STATUS = '0' OR con.signedStatus = 'Initial' THEN N'รอลงนาม'
+                        ELSE N'ลงนามไม่สำเร็จ' 
                     END AS SignedText,
-                    CASE WHEN checkcon.numdoc > 1 THEN 'พบรายการซ้ำ' ELSE 'ปกติ' END AS NumDoc,
+                    CASE WHEN checkcon.numdoc > 1 THEN N'พบรายการซ้ำ' ELSE N'ปกติ' END AS NumDoc,
                     CASE 
-                        WHEN new.newnum = 1 AND new.arm_Loaded_flag IN (0, 1) THEN 'เรียบร้อย'
+                        WHEN new.newnum = 1 AND new.arm_Loaded_flag IN (0, 1) THEN N'เรียบร้อย'
                         WHEN new.newnum = 1 AND new.arm_Loaded_flag = 2 THEN 'CANCELLED'
-                        WHEN new.newnum > 1 THEN 'รายการซ้ำ'
-                        ELSE 'ไม่พบรายการ' 
+                        WHEN new.newnum > 1 THEN N'รายการซ้ำ'
+                        ELSE N'ไม่พบรายการ' 
                     END AS NewNum,
                     CASE 
-                        WHEN pay.paynum = 1 AND pay.ARM_RECEIPT_STAT = 'APPROVED' THEN 'เรียบร้อย'
+                        WHEN pay.paynum = 1 AND pay.ARM_RECEIPT_STAT = 'APPROVED' THEN N'เรียบร้อย'
                         WHEN pay.paynum = 1 AND pay.ARM_RECEIPT_STAT = 'CANCELLED' THEN 'CANCELLED'
-                        WHEN pay.paynum > 1 THEN 'รายการซ้ำ'
-                        ELSE 'ไม่พบรายการ' 
+                        WHEN pay.paynum > 1 THEN N'รายการซ้ำ'
+                        ELSE N'ไม่พบรายการ' 
                     END AS PayNum,
                     '' AS LINE_STATUS,
                     '' AS TRANSFER_DATE,
                     appex.RefCode,
-                    LEFT(appex.OU_Code, 3) AS OU_Code,
+                    ISNULL(LEFT(appex.OU_Code, 3),'') AS OU_Code,
                     appex.loanTypeCate,
-                    ISNULL(a.Ref4,'') AS Ref4
+                    '' AS Ref4,
+                    p.FLAG_STATUS AS FLAG_STATUS
                 FROM {DATABASEK2}.[Application] a WITH (NOLOCK)
                 INNER JOIN {DATABASEK2}.[ApplicationExtend] appex WITH (NOLOCK) ON appex.ApplicationID = a.ApplicationID
                 LEFT JOIN {DATABASEK2}.[Customer] cus WITH (NOLOCK) ON cus.CustomerID = a.CustomerID
@@ -327,7 +329,7 @@ namespace App.Controllers
                         StatusRegis = _ApplicationModel.StatusRegis
                     };
 
-                    var commandDefinition = new CommandDefinition(sql, parameters, commandTimeout: 300); // Timeout in seconds
+                    var commandDefinition = new CommandDefinition(sql, parameters, commandTimeout: 3000); // Timeout in seconds
 
 
                     var applications = connection.Query<ApplicationResponeModel>(commandDefinition);
@@ -782,6 +784,59 @@ namespace App.Controllers
 
         }
 
+
+        [HttpPost]
+        public async Task<MessageReturn> GenEsigNew(GetApplication _C100StatusRq)
+        {
+
+            Log.Debug("By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_C100StatusRq));
+            MessageReturn _MessageReturn = new MessageReturn();
+            try
+            {
+
+
+
+                SqlConnection connection = new SqlConnection();
+                connection.ConnectionString = strConnString;
+                connection.Open();
+                SqlCommand sqlCommand;
+                string strSQL2 = $@"SELECT [DocumentNo] FROM {SGCESIGNATURE}.[contracts]  WHERE [DocumentNo] = @DocumentNo";
+                sqlCommand = new SqlCommand(strSQL2, connection);
+                sqlCommand.CommandType = CommandType.StoredProcedure;
+                sqlCommand.Parameters.AddWithValue("DocumentNo", _C100StatusRq.ApplicationCode);
+
+                SqlDataAdapter dtAdapter = new SqlDataAdapter();
+                dtAdapter.SelectCommand = sqlCommand;
+                DataTable dt = new DataTable();
+                dtAdapter.Fill(dt);
+               
+                sqlCommand.Parameters.Clear();
+
+                if (dt.Rows.Count <= 0)
+                {
+                    string strSQL = SGCESIGNATURE + ".[ESG_SP_GEN_CONTRACT_SGFINANCE]";
+                    sqlCommand = new SqlCommand(strSQL, connection);
+                    sqlCommand.CommandType = CommandType.StoredProcedure;
+                    sqlCommand.Parameters.AddWithValue("ApplicationCode", _C100StatusRq.ApplicationCode);
+                    sqlCommand.CommandType = CommandType.StoredProcedure;
+                    sqlCommand.ExecuteNonQuery();
+                    sqlCommand.Parameters.Clear();
+                    connection.Close();
+                }
+
+                _MessageReturn.Message = "Success.";
+                connection.Close();
+            }
+            catch (Exception ex) {
+                _MessageReturn.Message = ex.Message;
+            }
+
+
+            Log.Debug("By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_MessageReturn));
+
+            return _MessageReturn;
+        }
+            
         [HttpPost]
         public async Task<MessageReturn> GetStatusClosedSGFinance([FromBody] C100StatusRq _C100StatusRq)
         {
@@ -891,8 +946,27 @@ namespace App.Controllers
                         var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
 
                         _MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
+
+
+                        if (_MessageReturn.Message != "Success.")
+                        {
+                            GetApplication _GetApplication = new GetApplication();
+                            _GetApplication.ApplicationCode = _C100StatusRq.ApplicationCode;
+                            GenEsigNew(_GetApplication);
+                            _MessageReturn.Message = "Success.";
+                        }
                     }
+                    else
+                    {
+                        GetApplication _GetApplication = new GetApplication();
+                        _GetApplication.ApplicationCode = _C100StatusRq.ApplicationCode;
+                        GenEsigNew(_GetApplication);
+                        _MessageReturn.Message = "Success.";
+                    }
+
+
                 }
+
 
                 Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
                 return _MessageReturn;

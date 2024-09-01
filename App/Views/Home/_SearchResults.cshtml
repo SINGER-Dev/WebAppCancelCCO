@@ -111,7 +111,7 @@
 
                             @if ("LOCKPHONE" == result.loanTypeCate.ToString().Trim() && "SGC" == result.OU_Code.ToString().Trim())
                             {
-                                @if (result.ApplicationStatusID == "CLOSING" && result.signedStatus == "รอลงนาม" && result.ProductSerialNo.Trim() != "")
+                                @if (result.ApplicationStatusID == "CLOSING" && (result.signedStatus == "รอลงนาม" || result.signedStatus == "-") && result.ProductSerialNo.Trim() != "")
                                 {
                                     <i class="GenEsignature fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
                                 }
@@ -119,7 +119,7 @@
 
                             @if ("LOCKPHONE" == result.loanTypeCate.ToString().Trim() && "STL" == result.OU_Code.ToString().Trim())
                             {
-                                @if (result.ApplicationStatusID == "CLOSING" && result.signedStatus == "รอลงนาม" && result.ProductSerialNo.Trim() != "" && result.Ref4.Trim() != "")
+                                @if (result.ApplicationStatusID == "CLOSING" && (result.signedStatus == "รอลงนาม" || result.signedStatus == "-") && result.ProductSerialNo.Trim() != "" && result.FLAG_STATUS.Trim() == "Y")
                                 {
                                     <i class="GenEsignature fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
                                 }
@@ -127,7 +127,7 @@
 
                             @if ("HP" == result.loanTypeCate.ToString().Trim() && "STL" == result.OU_Code.ToString().Trim())
                             {
-                                @if (result.ApplicationStatusID == "CLOSING" && result.signedStatus == "รอลงนาม" && result.ProductSerialNo.Trim() != "" && result.Ref4.Trim() != "")
+                                @if (result.ApplicationStatusID == "CLOSING" && (result.signedStatus == "รอลงนาม" || result.signedStatus == "-") && result.ProductSerialNo.Trim() != "" && result.FLAG_STATUS.Trim() == "Y")
                                 {
                                     <i class="GenEsignature fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
                                 }
@@ -154,7 +154,7 @@
                                 <B>ลงทะเบียนเครื่อง : </B>
 
                                 <span class="badge bg-success">@result.numregis</span>
-                                @if (result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว")
+                                @if ((result.signedStatus == "เรียบร้อย" || result.signedStatus == "COMP-Fail") && result.statusReceived == "รับสินค้าแล้ว")
                                 {
                                     <i class="RegisIMEI fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
                                 }
@@ -165,11 +165,11 @@
                                 <B>ลงทะเบียนเครื่อง : </B>
 
                                 <span class="badge bg-warning" style="color:#000">@result.numregis</span>
-                                @if (result.OU_Code == "STL" && result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว")
+                                @if (result.OU_Code == "STL" && (result.signedStatus == "เรียบร้อย" || result.signedStatus == "COMP-Fail") && result.statusReceived == "รับสินค้าแล้ว")
                                 {
                                     <i class="RegisIMEI fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
                                 }
-                                else if (result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว" && result.newnum == "เรียบร้อย" && result.paynum == "เรียบร้อย")
+                                else if ((result.signedStatus == "เรียบร้อย" || result.signedStatus == "COMP-Fail") && result.statusReceived == "รับสินค้าแล้ว" && result.newnum == "เรียบร้อย" && result.paynum == "เรียบร้อย")
                                 {
                                     <i class="RegisIMEI fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
                                 }
