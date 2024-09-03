@@ -11,6 +11,10 @@
       "RelativeMoniker": "D:0:0:{F68F1CC0-7E95-4C5B-8AED-AD0152E0D290}|App\\App.csproj|solutionrelative:app\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
     },
     {
+      "AbsoluteMoniker": "D:0:0:{F68F1CC0-7E95-4C5B-8AED-AD0152E0D290}|App\\App.csproj|d:\\project\\webappcancelcco\\app\\views\\home\\formcancel.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{F68F1CC0-7E95-4C5B-8AED-AD0152E0D290}|App\\App.csproj|solutionrelative:app\\views\\home\\formcancel.cshtml||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{F68F1CC0-7E95-4C5B-8AED-AD0152E0D290}|App\\App.csproj|d:\\project\\webappcancelcco\\app\\models\\applicationresponemodel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
       "RelativeMoniker": "D:0:0:{F68F1CC0-7E95-4C5B-8AED-AD0152E0D290}|App\\App.csproj|solutionrelative:app\\models\\applicationresponemodel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
@@ -50,11 +54,36 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 10,
+          "SelectedChildIndex": 14,
           "Children": [
             {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 2,
+              "Title": "FormCancel.cshtml",
+              "DocumentMoniker": "D:\\Project\\WebAppCancelCCO\\App\\Views\\Home\\FormCancel.cshtml",
+              "RelativeDocumentMoniker": "App\\Views\\Home\\FormCancel.cshtml",
+              "ToolTip": "D:\\Project\\WebAppCancelCCO\\App\\Views\\Home\\FormCancel.cshtml",
+              "RelativeToolTip": "App\\Views\\Home\\FormCancel.cshtml",
+              "ViewState": "AQIAAGYAAAAAAAAAAAAAAHsAAAAIAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2024-09-03T09:50:46.646Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
               "Title": "ResourceInvoker.cs",
               "DocumentMoniker": "C:\\Users\\CODEDUCK\\AppData\\Local\\Temp\\.vsdbgsrc\\3a5a2413f8b33d7c743d6d639af704f5275ded194c6eb8fa30649eba1c8313fe\\ResourceInvoker.cs",
               "ToolTip": "C:\\Users\\CODEDUCK\\AppData\\Local\\Temp\\.vsdbgsrc\\3a5a2413f8b33d7c743d6d639af704f5275ded194c6eb8fa30649eba1c8313fe\\ResourceInvoker.cs",
@@ -64,7 +93,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 6,
               "Title": "PartialViewResultExecutor.cs",
               "DocumentMoniker": "C:\\Users\\CODEDUCK\\AppData\\Local\\Temp\\.vsdbgsrc\\6ddbcfa95b24614cb2b38b1cd7767569686de657f483b032dc26c931072afc91\\PartialViewResultExecutor.cs",
               "ToolTip": "C:\\Users\\CODEDUCK\\AppData\\Local\\Temp\\.vsdbgsrc\\6ddbcfa95b24614cb2b38b1cd7767569686de657f483b032dc26c931072afc91\\PartialViewResultExecutor.cs",
@@ -74,7 +103,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 7,
+              "DocumentIndex": 8,
               "Title": "ViewExecutor.cs",
               "DocumentMoniker": "C:\\Users\\CODEDUCK\\AppData\\Local\\Temp\\.vsdbgsrc\\4a05b8e6420357241794c90bac01120bf8f4f2f05257fd742c4e69a3965515f0\\ViewExecutor.cs",
               "ToolTip": "C:\\Users\\CODEDUCK\\AppData\\Local\\Temp\\.vsdbgsrc\\4a05b8e6420357241794c90bac01120bf8f4f2f05257fd742c4e69a3965515f0\\ViewExecutor.cs [Read Only]",
@@ -85,7 +114,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 5,
               "Title": "RazorView.cs",
               "DocumentMoniker": "C:\\Users\\CODEDUCK\\AppData\\Local\\Temp\\.vsdbgsrc\\13bf4daee0917368e00f165ef41e144925d26cc2bd515137743d73786f6b0609\\RazorView.cs",
               "ToolTip": "C:\\Users\\CODEDUCK\\AppData\\Local\\Temp\\.vsdbgsrc\\13bf4daee0917368e00f165ef41e144925d26cc2bd515137743d73786f6b0609\\RazorView.cs",
@@ -95,7 +124,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 8,
+              "DocumentIndex": 9,
               "Title": "ApplicationModel.cs",
               "DocumentMoniker": "D:\\Project\\WebAppCancelCCO\\App\\Models\\ApplicationModel.cs",
               "RelativeDocumentMoniker": "App\\Models\\ApplicationModel.cs",
@@ -107,7 +136,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 3,
               "Title": "ApplicationResponeModel.cs",
               "DocumentMoniker": "D:\\Project\\WebAppCancelCCO\\App\\Models\\ApplicationResponeModel.cs",
               "RelativeDocumentMoniker": "App\\Models\\ApplicationResponeModel.cs",
@@ -119,7 +148,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 9,
+              "DocumentIndex": 10,
               "Title": "site.js",
               "DocumentMoniker": "D:\\Project\\WebAppCancelCCO\\App\\wwwroot\\js\\site.js",
               "RelativeDocumentMoniker": "App\\wwwroot\\js\\site.js",
@@ -131,7 +160,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 10,
+              "DocumentIndex": 11,
               "Title": "Program.cs",
               "DocumentMoniker": "D:\\Project\\WebAppCancelCCO\\App\\Program.cs",
               "RelativeDocumentMoniker": "App\\Program.cs",
@@ -143,7 +172,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 7,
               "Title": "_SearchResults.cshtml",
               "DocumentMoniker": "D:\\Project\\WebAppCancelCCO\\App\\Views\\Home\\_SearchResults.cshtml",
               "RelativeDocumentMoniker": "App\\Views\\Home\\_SearchResults.cshtml",
@@ -161,9 +190,10 @@
               "RelativeDocumentMoniker": "App\\appsettings.json",
               "ToolTip": "D:\\Project\\WebAppCancelCCO\\App\\appsettings.json",
               "RelativeToolTip": "App\\appsettings.json",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAABgAAAA2AAAA",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAA0AAAATAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2024-08-24T14:25:21.462Z"
+              "WhenOpened": "2024-08-24T14:25:21.462Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
@@ -173,7 +203,7 @@
               "RelativeDocumentMoniker": "App\\Controllers\\HomeController.cs",
               "ToolTip": "D:\\Project\\WebAppCancelCCO\\App\\Controllers\\HomeController.cs",
               "RelativeToolTip": "App\\Controllers\\HomeController.cs",
-              "ViewState": "AQIAAPcAAAAAAAAAAAAcwBUBAAAbAAAA",
+              "ViewState": "AQIAAPQAAAAAAAAAAAAAAA4BAAA8AAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2024-08-24T14:12:40.309Z",
               "EditorCaption": ""

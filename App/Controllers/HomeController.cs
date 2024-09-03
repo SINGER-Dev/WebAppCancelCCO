@@ -797,31 +797,27 @@ namespace App.Controllers
 
 
                 SqlConnection connection = new SqlConnection();
-                connection.ConnectionString = strConnString;
+                connection.ConnectionString = strConnString2;
                 connection.Open();
                 SqlCommand sqlCommand;
-                string strSQL2 = $@"SELECT [DocumentNo] FROM {SGCESIGNATURE}.[contracts]  WHERE [DocumentNo] = @DocumentNo";
+                string strSQL2 = $@"SELECT [DocumentNo] FROM {SGCESIGNATURE}.[contracts]  WHERE [DocumentNo] = @DocumentNo2";
                 sqlCommand = new SqlCommand(strSQL2, connection);
-                sqlCommand.CommandType = CommandType.StoredProcedure;
-                sqlCommand.Parameters.AddWithValue("DocumentNo", _C100StatusRq.ApplicationCode);
-
+                sqlCommand.CommandType = CommandType.Text;
+                sqlCommand.Parameters.AddWithValue("@DocumentNo2", _C100StatusRq.ApplicationCode);
+       
                 SqlDataAdapter dtAdapter = new SqlDataAdapter();
                 dtAdapter.SelectCommand = sqlCommand;
                 DataTable dt = new DataTable();
                 dtAdapter.Fill(dt);
-               
                 sqlCommand.Parameters.Clear();
-
                 if (dt.Rows.Count <= 0)
                 {
                     string strSQL = SGCESIGNATURE + ".[ESG_SP_GEN_CONTRACT_SGFINANCE]";
                     sqlCommand = new SqlCommand(strSQL, connection);
                     sqlCommand.CommandType = CommandType.StoredProcedure;
                     sqlCommand.Parameters.AddWithValue("ApplicationCode", _C100StatusRq.ApplicationCode);
-                    sqlCommand.CommandType = CommandType.StoredProcedure;
                     sqlCommand.ExecuteNonQuery();
                     sqlCommand.Parameters.Clear();
-                    connection.Close();
                 }
 
                 _MessageReturn.Message = "Success.";
@@ -950,23 +946,23 @@ namespace App.Controllers
 
                         if (_MessageReturn.Message != "Success.")
                         {
-                            GetApplication _GetApplication = new GetApplication();
-                            _GetApplication.ApplicationCode = _C100StatusRq.ApplicationCode;
-                            GenEsigNew(_GetApplication);
+
                             _MessageReturn.Message = "Success.";
                         }
                     }
                     else
                     {
-                        GetApplication _GetApplication = new GetApplication();
-                        _GetApplication.ApplicationCode = _C100StatusRq.ApplicationCode;
-                        GenEsigNew(_GetApplication);
+                        
+             
                         _MessageReturn.Message = "Success.";
                     }
 
 
                 }
 
+                GetApplication _GetApplication = new GetApplication();
+                _GetApplication.ApplicationCode = _C100StatusRq.ApplicationCode;
+                GenEsigNew(_GetApplication);
 
                 Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
                 return _MessageReturn;
