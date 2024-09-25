@@ -18,7 +18,7 @@ namespace App.Controllers
     {
         private readonly ILogger<HomeController> _logger;
         string strConnString, DATABASEK2, WSCANCEL, UrlEztax, UsernameEztax, PasswordEztax, ClientIdEztax, ApiKey, SGAPIESIG, SGDIRECT, SGCESIGNATURE, SGCROSSBANK;
-                    
+
         public HomeController(ILogger<HomeController> logger)
         {
 
@@ -166,7 +166,7 @@ namespace App.Controllers
                 Log.Debug(JsonConvert.SerializeObject(_SearchGetApplicationHistoryResponeMaster));
 
                 sqlCommand.Parameters.Clear();
-                
+
             }
             catch (Exception ex)
             {
@@ -379,9 +379,9 @@ namespace App.Controllers
                 //{
 
 
-                    GetApplication _GetApplication = new GetApplication();
-                    _GetApplication.ApplicationCode = _FormConfirmModel.ApplicationCode;
-                    GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
+                GetApplication _GetApplication = new GetApplication();
+                _GetApplication.ApplicationCode = _FormConfirmModel.ApplicationCode;
+                GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
 
                 //Cancel Application
                 //CCOWebServiceModel _CCOWebService = new CCOWebServiceModel();
@@ -425,38 +425,38 @@ namespace App.Controllers
 
                 if (string.IsNullOrEmpty(ResultDescription))
                 {
-                        string currentDateTime = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
-                        var requestBody = new
+                    string currentDateTime = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+                    var requestBody = new
+                    {
+                        applicationCode = _GetApplicationRespone.ApplicationCode,
+                        applicationStatus = "CANCELLED",
+                        approvalStatus = "CANCELLED",
+                        approvalDatetime = currentDateTime,
+                        remark = _FormConfirmModel.Remark + "" + _FormConfirmModel.Other
+                    };
+
+                    Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody));
+
+                    using (HttpClient client = new HttpClient())
+                    {
+                        string jsonBody = JsonConvert.SerializeObject(requestBody);
+
+                        client.DefaultRequestHeaders.Add("apikey", ApiKey);
+                        client.DefaultRequestHeaders.Add("user", "DEV");
+
+                        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                        HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/Service/C100_Status", content);
+                        int DeviceStatusCode = (int)responseDevice.StatusCode;
+
+                        Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+
+                        if (responseDevice.IsSuccessStatusCode)
                         {
-                            applicationCode = _GetApplicationRespone.ApplicationCode,
-                            applicationStatus = "CANCELLED",
-                            approvalStatus = "CANCELLED",
-                            approvalDatetime = currentDateTime,
-                            remark = _FormConfirmModel.Remark + "" + _FormConfirmModel.Other
-                        };
+                            var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
 
-                        Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody));
-
-                        using (HttpClient client = new HttpClient())
-                        {
-                            string jsonBody = JsonConvert.SerializeObject(requestBody);
-
-                            client.DefaultRequestHeaders.Add("apikey", ApiKey);
-                            client.DefaultRequestHeaders.Add("user", "DEV");
-
-                            var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                            HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/Service/C100_Status", content);
-                            int DeviceStatusCode = (int)responseDevice.StatusCode;
-
-                            Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
-
-                            if (responseDevice.IsSuccessStatusCode)
-                            {
-                                var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
-
-                            }
                         }
                     }
+                }
                 //}
                 //else
                 //{
@@ -464,13 +464,13 @@ namespace App.Controllers
                 //}
                 return ResultDescription;
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 ResultDescription = ex.Message;
                 return ResultDescription;
             }
 
-            
+
         }
 
         [HttpPost]
@@ -523,7 +523,7 @@ namespace App.Controllers
                 sqlCommand.Parameters.AddWithValue("CANCEL_USER", HttpContext.Session.GetString("EMP_CODE"));
 
                 SqlDataAdapter dtAdapter = new SqlDataAdapter();
-                
+
                 dtAdapter.SelectCommand = sqlCommand;
                 DataTable dt = new DataTable();
                 dtAdapter.Fill(dt);
@@ -660,7 +660,7 @@ namespace App.Controllers
                 Log.Error("WorkflowGoToCancelRequest Fail : " + ex.Message);
                 return _MessageModel;
             }
-            
+
         }
 
         [HttpPost]
@@ -675,7 +675,7 @@ namespace App.Controllers
                 var body = "";
                 ServicePointManager.Expect100Continue = true;
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-                var client = new RestClient(UrlEztax+ "/api/auth"); 
+                var client = new RestClient(UrlEztax + "/api/auth");
                 client.Timeout = 60000;
                 var request = new RestRequest(Method.POST);
                 var Arr_Body = new
@@ -757,14 +757,14 @@ namespace App.Controllers
                     _GetApplicationRespone.ProductModelName = dt.Rows[0]["ProductModelName"].ToString();
 
                     _GetApplicationRespone.ProductBrandName = dt.Rows[0]["ProductBrandName"].ToString();
-                    
+
 
                     _GetApplicationRespone.CustomerID = dt.Rows[0]["CustomerID"].ToString();
                     _GetApplicationRespone.Cusname = dt.Rows[0]["Cusname"].ToString();
                     _GetApplicationRespone.cusMobile = dt.Rows[0]["cusMobile"].ToString();
                     _GetApplicationRespone.SaleName = dt.Rows[0]["SaleName"].ToString();
                     _GetApplicationRespone.SaleTelephoneNo = dt.Rows[0]["SaleTelephoneNo"].ToString();
-                    
+
                 }
                 else
                 {
@@ -774,7 +774,7 @@ namespace App.Controllers
                 Log.Debug("RETURN : " + JsonConvert.SerializeObject(_GetApplicationRespone));
 
                 sqlCommand.Parameters.Clear();
-                
+
                 return _GetApplicationRespone;
             }
             catch (Exception ex)
@@ -836,7 +836,7 @@ namespace App.Controllers
                         client.DefaultRequestHeaders.Add("user", "DEV");
 
                         var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                        HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG+ "/Service/C100_Status", content);
+                        HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/Service/C100_Status", content);
                         int DeviceStatusCode = (int)responseDevice.StatusCode;
 
                         Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
@@ -920,39 +920,39 @@ namespace App.Controllers
             try
             {
 
-                    var requestBody = new
+                var requestBody = new
+                {
+                    APPLICATION_CODE = _C100StatusRq.ApplicationCode
+                };
+
+                Log.Debug("API REQUEST : " + JsonConvert.SerializeObject(requestBody));
+
+
+                using (HttpClient client = new HttpClient())
+                {
+                    string jsonBody = JsonConvert.SerializeObject(requestBody);
+
+                    client.DefaultRequestHeaders.Add("apikey", ApiKey);
+                    client.DefaultRequestHeaders.Add("user", "DEV");
+
+                    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+
+                    HttpResponseMessage responseDevice;
+
+                    responseDevice = await client.PostAsync(SGAPIESIG + "/SubmitSale", content);
+
+
+                    int DeviceStatusCode = (int)responseDevice.StatusCode;
+
+                    Log.Debug("API RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+
+                    if (responseDevice.IsSuccessStatusCode)
                     {
-                        APPLICATION_CODE = _C100StatusRq.ApplicationCode
-                    };
+                        var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
 
-                    Log.Debug("API REQUEST : " + JsonConvert.SerializeObject(requestBody));
-
-
-                    using (HttpClient client = new HttpClient())
-                    {
-                        string jsonBody = JsonConvert.SerializeObject(requestBody);
-
-                        client.DefaultRequestHeaders.Add("apikey", ApiKey);
-                        client.DefaultRequestHeaders.Add("user", "DEV");
-
-                        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-
-                        HttpResponseMessage responseDevice;
-
-                        responseDevice = await client.PostAsync(SGAPIESIG + "/SubmitSale", content);
-
-
-                        int DeviceStatusCode = (int)responseDevice.StatusCode;
-
-                        Log.Debug("API RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
-
-                        if (responseDevice.IsSuccessStatusCode)
-                        {
-                            var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
-
-                            _MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
-                        }
+                        _MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
                     }
+                }
                 //}
                 Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
                 return _MessageReturn;
