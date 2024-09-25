@@ -39,6 +39,12 @@ namespace App.Models
     {
         public string? statusCode { get; set; }
     }
+
+    public class SendEmailRespone
+    {
+        public string? statusCode { get; set; }
+    }
+    
     public class GetOuCodeRespone
     {
         public string? statusCode { get; set; }
@@ -117,4 +123,23 @@ namespace App.Models
         public string? SaleTelephoneNo { get; set; }
 
     }
+
+
+    public class SenEmailBody
+    {
+        public string fromName { get; set; }
+        public string fromEmail { get; set; }
+        public List<SenEmailTo> to { get; set; }
+        public List<object> cc { get; set; }
+        public List<object> bcc { get; set; }
+        public string subject { get; set; }
+        public string content { get; set; }
+    }
+
+    public class SenEmailTo
+    {
+        public string Name { get; set; }
+        public string Email { get; set; }
+    }
+
 }
