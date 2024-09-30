@@ -14,6 +14,7 @@ using Dapper;
 using Microsoft.Identity.Client;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using static System.Net.Mime.MediaTypeNames;
+using Microsoft.IdentityModel.Tokens;
 
 namespace App.Controllers
 {
@@ -266,9 +267,11 @@ namespace App.Controllers
                     appex.RefCode,
                     ISNULL(LEFT(appex.OU_Code, 3),'') AS OU_Code,
                     appex.loanTypeCate,
-                    bank.ref4 AS Ref4
+                    bank.ref4 AS Ref4,
+                    ISNULL(appIns.ApplicationID,'') AS appIns
                 FROM {DATABASEK2}.[Application] a WITH (NOLOCK)
                 INNER JOIN {DATABASEK2}.[ApplicationExtend] appex WITH (NOLOCK) ON appex.ApplicationID = a.ApplicationID
+                LEFT JOIN {DATABASEK2}.[ApplicationInsurance] appIns WITH (NOLOCK) ON appIns.ApplicationID = a.ApplicationID
                 LEFT JOIN {DATABASEK2}.[Customer] cus WITH (NOLOCK) ON cus.CustomerID = a.CustomerID
                 LEFT JOIN {DATABASEK2}.[Application_ESIG_STATUS] c WITH (NOLOCK) ON a.ApplicationCode = c.APPLICATION_CODE
                 LEFT JOIN #CONTRACTS_TEMP con WITH (NOLOCK) ON a.ApplicationCode = con.documentno
@@ -443,6 +446,14 @@ namespace App.Controllers
 
                 if (string.IsNullOrEmpty(ResultDescription))
                 {
+                    //ถ้าเป็น SGB
+                   /* if (!string.IsNullOrEmpty(_GetApplicationRespone.appIns))
+                    {
+                        SGBCancelRespone sGBCancelRespone = new SGBCancelRespone();
+                        sGBCancelRespone = await SGBCancel(_GetApplication);
+                    }*/
+ 
+
                     string currentDateTime = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
                     var requestBody = new
                     {
@@ -778,7 +789,7 @@ namespace App.Controllers
                                 ON
                                     appex.ApplicationID = app.ApplicationID
                                 WHERE
-                                    app.ApplicationCode = @ApplicationCode; ";
+                                    app.ApplicationCode = @ApplicationCode OR appex.RefCode = @ApplicationCode; ";
                 sqlCommand = new SqlCommand(sql, connection);
                 sqlCommand.CommandType = CommandType.Text;
                 sqlCommand.Parameters.Add("@ApplicationCode", SqlDbType.NChar);
@@ -1118,10 +1129,10 @@ namespace App.Controllers
             }
         }
 
-        public async Task<SendEmailRespone> SGBCancel([FromBody] GetApplication _GetApplication)
+        public async Task<SGBCancelRespone> SGBCancel([FromBody] GetApplication _GetApplication)
         {
             Log.Debug("By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_GetApplication));
-            SendEmailRespone sendEmailRespone = new SendEmailRespone();
+            SGBCancelRespone sGBCancelRespone = new SGBCancelRespone();
             try
             {
                 GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
@@ -1147,18 +1158,18 @@ namespace App.Controllers
                     {
                         var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
 
-                        sendEmailRespone = JsonConvert.DeserializeObject<SendEmailRespone>(jsonResponseDevice);
+                        sGBCancelRespone = JsonConvert.DeserializeObject<SGBCancelRespone>(jsonResponseDevice);
                     }
                 }
 
-                Log.Debug("RETURN : " + JsonConvert.SerializeObject(sendEmailRespone));
-                return sendEmailRespone;
+                Log.Debug("RETURN : " + JsonConvert.SerializeObject(sGBCancelRespone));
+                return sGBCancelRespone;
             }
             catch (Exception ex)
             {
-                sendEmailRespone.statusCode = ex.Message;
-                Log.Debug("RETURN : " + JsonConvert.SerializeObject(sendEmailRespone));
-                return sendEmailRespone;
+                sGBCancelRespone.message = ex.Message;
+                Log.Debug("RETURN : " + JsonConvert.SerializeObject(sGBCancelRespone));
+                return sGBCancelRespone;
             }
         }
 

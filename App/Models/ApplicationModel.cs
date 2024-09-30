@@ -45,6 +45,12 @@ namespace App.Models
     {
         public string? statusCode { get; set; }
     }
+
+    public class SGBCancelRespone
+    {
+        public string? status { get; set; }
+        public string? message { get; set; }
+    }
     
     public class GetOuCodeRespone
     {
@@ -123,7 +129,7 @@ namespace App.Models
         public string? SaleName { get; set; }
         public string? SaleTelephoneNo { get; set; }
         public string? RefCode { get; set; }
-        
+        public string? appIns { get; set; }
     }
 
 
