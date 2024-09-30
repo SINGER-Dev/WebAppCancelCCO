@@ -11,13 +11,16 @@ using System.Text;
 using RestSharp;
 using System.Globalization;
 using Dapper;
+using Microsoft.Identity.Client;
+using Microsoft.AspNetCore.Mvc.ApplicationModels;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace App.Controllers
 {
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
-        string strConnString, DATABASEK2, WSCANCEL, UrlEztax, UsernameEztax, PasswordEztax, ClientIdEztax, ApiKey, SGAPIESIG, SGDIRECT, SGCESIGNATURE, SGCROSSBANK;
+        string strConnString, DATABASEK2, WSCANCEL, UrlEztax, UsernameEztax, PasswordEztax, ClientIdEztax, ApiKey, SGAPIESIG, SGDIRECT, SGCESIGNATURE, SGCROSSBANK, C100 , C100Apikey, SGBCancelApikey;
 
         public HomeController(ILogger<HomeController> logger)
         {
@@ -44,7 +47,9 @@ namespace App.Controllers
             SGDIRECT = builder.GetConnectionString("SGDIRECT");
             SGCESIGNATURE = builder.GetConnectionString("SGCESIGNATURE");
             SGCROSSBANK = builder.GetConnectionString("SGCROSSBANK");
-
+            C100 = builder.GetConnectionString("C100");
+            C100Apikey = builder.GetConnectionString("C100Apikey");
+            SGBCancelApikey = builder.GetConnectionString("SGBCancelApikey");
         }
 
 
@@ -261,7 +266,7 @@ namespace App.Controllers
                     appex.RefCode,
                     ISNULL(LEFT(appex.OU_Code, 3),'') AS OU_Code,
                     appex.loanTypeCate,
-                    '' AS Ref4
+                    bank.ref4 AS Ref4
                 FROM {DATABASEK2}.[Application] a WITH (NOLOCK)
                 INNER JOIN {DATABASEK2}.[ApplicationExtend] appex WITH (NOLOCK) ON appex.ApplicationID = a.ApplicationID
                 LEFT JOIN {DATABASEK2}.[Customer] cus WITH (NOLOCK) ON cus.CustomerID = a.CustomerID
@@ -296,6 +301,19 @@ namespace App.Controllers
 					AND (CONVERT(date,CREATED_DATE,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
                     GROUP BY ARM_ACC_NO, ARM_RECEIPT_STAT
                 ) pay ON pay.ARM_ACC_NO = a.AccountNo
+                LEFT JOIN (SELECT a.applicationid,
+                                  a.applicationcode,
+                                  a.ref4,
+                                  p.amt_shp_pay,
+                                  p.amt_paid,
+                                    p.flag_status
+                           FROM {DATABASEK2}.[application] a WITH (NOLOCK)
+                           INNER JOIN {DATABASEK2}.[applicationextend] e WITH (NOLOCK)
+                               ON a.applicationid = e.applicationid
+                           INNER JOIN {SGCROSSBANK}.[sg_payment_realtime] p WITH (NOLOCK)
+                               ON a.ref4 = p.ref1
+                           WHERE p.flag_status = 'Y' AND ISNULL(a.ref4, '') <> ''
+                ) bank ON bank.applicationcode = a.applicationcode
                 WHERE (CONVERT(date,a.ApplicationDate,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '')
                   AND (CONVERT(date,a.ApplicationDate,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
                   AND (@status IS NULL OR a.ApplicationStatusID = @status)
@@ -445,7 +463,7 @@ namespace App.Controllers
                         client.DefaultRequestHeaders.Add("user", "DEV");
 
                         var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                        HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/Service/C100_Status", content);
+                        HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/C100_Status", content);
                         int DeviceStatusCode = (int)responseDevice.StatusCode;
 
                         Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
@@ -559,7 +577,7 @@ namespace App.Controllers
                         client.DefaultRequestHeaders.Add("user", "DEV");
 
                         var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                        HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/Service/C100_Status", content);
+                        HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/C100_Status", content);
                         int DeviceStatusCode = (int)responseDevice.StatusCode;
 
                         Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
@@ -732,7 +750,35 @@ namespace App.Controllers
                 connection.Open();
                 SqlCommand sqlCommand;
 
-                string sql = "SELECT app.ApplicationID,app.AccountNo,app.ApplicationStatusID,app.CustomerID, app.ApplicationCode ,app.ProductID, cus.FirstName + ' ' + cus.LastName as Cusname ,cus.MobileNo1 as cusMobile ,app.SaleName ,app.SaleTelephoneNo,app.ProductModelName,app.ProductSerialNo,app.ProductBrandName ,app.SaleDepCode,app.SaleDepName FROM " + DATABASEK2 + ".[Application] app left join " + DATABASEK2 + ".[Customer] cus on cus.CustomerID = app.CustomerID  WHERE app.ApplicationCode = @ApplicationCode";
+                string sql = @$"SELECT 
+                                    app.ApplicationID,
+                                    app.AccountNo,
+                                    app.ApplicationStatusID,
+                                    app.CustomerID,
+                                    app.ApplicationCode,
+                                    app.ProductID,
+                                    cus.FirstName + ' ' + cus.LastName AS Cusname,
+                                    cus.MobileNo1 AS cusMobile,
+                                    app.SaleName,
+                                    app.SaleTelephoneNo,
+                                    app.ProductModelName,
+                                    app.ProductSerialNo,
+                                    app.ProductBrandName,
+                                    app.SaleDepCode,
+                                    app.SaleDepName,
+                                    appex.RefCode
+                                FROM
+                                    {DATABASEK2}.[Application] app WITH (NOLOCK)
+                                LEFT JOIN
+                                    {DATABASEK2}.[Customer] cus WITH (NOLOCK)
+                                ON
+                                    cus.CustomerID = app.CustomerID
+                                LEFT JOIN
+                                    {DATABASEK2}.[ApplicationExtend] appex WITH (NOLOCK)
+                                ON
+                                    appex.ApplicationID = app.ApplicationID
+                                WHERE
+                                    app.ApplicationCode = @ApplicationCode; ";
                 sqlCommand = new SqlCommand(sql, connection);
                 sqlCommand.CommandType = CommandType.Text;
                 sqlCommand.Parameters.Add("@ApplicationCode", SqlDbType.NChar);
@@ -764,7 +810,8 @@ namespace App.Controllers
                     _GetApplicationRespone.cusMobile = dt.Rows[0]["cusMobile"].ToString();
                     _GetApplicationRespone.SaleName = dt.Rows[0]["SaleName"].ToString();
                     _GetApplicationRespone.SaleTelephoneNo = dt.Rows[0]["SaleTelephoneNo"].ToString();
-
+                    _GetApplicationRespone.RefCode = dt.Rows[0]["RefCode"].ToString();
+                    
                 }
                 else
                 {
@@ -823,7 +870,9 @@ namespace App.Controllers
                         applicationStatus = _requestBodyValue.applicationStatus,
                         approvalStatus = _requestBodyValue.approvalStatus,
                         approvalDatetime = _requestBodyValue.approvalDatetime,
-                        remark = _requestBodyValue.remark
+                        remark = "เลขใบคำขอ : "+_requestBodyValue.applicationCode+" เลขที่สัญญา : " + dt.Rows[0]["Accountno"].ToString(),
+                        losApplicationCode = _requestBodyValue.applicationCode,
+                        contractNo = dt.Rows[0]["Accountno"].ToString()
                     };
 
                     Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody));
@@ -832,20 +881,19 @@ namespace App.Controllers
                     {
                         string jsonBody = JsonConvert.SerializeObject(requestBody);
 
-                        client.DefaultRequestHeaders.Add("apikey", ApiKey);
-                        client.DefaultRequestHeaders.Add("user", "DEV");
+                        client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
 
                         var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                        HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/Service/C100_Status", content);
+                        HttpResponseMessage responseDevice = await client.PostAsync(C100 + "/los/v2/SgFinance/C100_Status", content);
                         int DeviceStatusCode = (int)responseDevice.StatusCode;
 
                         Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
 
                         if (responseDevice.IsSuccessStatusCode)
                         {
-                            var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
-
-                            _MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
+                            _MessageReturn.StatusCode = "200";
+                            _MessageReturn.Message = "PASS";
+                            
                         }
                     }
                 }
@@ -885,7 +933,7 @@ namespace App.Controllers
                     client.DefaultRequestHeaders.Add("user", "DEV");
 
                     var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/api/v2/GenEsignature", content);
+                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/api/v2/GenEsignature", content);
                     int DeviceStatusCode = (int)responseDevice.StatusCode;
 
                     Log.Debug("API RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
@@ -939,7 +987,7 @@ namespace App.Controllers
 
                     HttpResponseMessage responseDevice;
 
-                    responseDevice = await client.PostAsync(SGAPIESIG + "/SubmitSale", content);
+                    responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/SubmitSale", content);
 
 
                     int DeviceStatusCode = (int)responseDevice.StatusCode;
@@ -989,7 +1037,7 @@ namespace App.Controllers
                     client.DefaultRequestHeaders.Add("user", "DEV");
 
                     var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/Service/RegisIMEI", content);
+                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/RegisIMEI", content);
                     int DeviceStatusCode = (int)responseDevice.StatusCode;
                     Log.Debug("API RETURN : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
                     if (responseDevice.IsSuccessStatusCode)
@@ -1080,20 +1128,19 @@ namespace App.Controllers
 
                 var requestBody = new
                 {
-                    SerrialNo = _GetApplicationRespone.ProductSerialNo,
-                    APPLICATION_CODE = _GetApplicationRespone.ApplicationCode,
-                    Brand = _GetApplicationRespone.ProductBrandName
+                    applicationCode = _GetApplicationRespone.ProductSerialNo,
+                    referenceNo = _GetApplicationRespone.RefCode
                 };
 
                 using (HttpClient client = new HttpClient())
                 {
                     string jsonBody = JsonConvert.SerializeObject(requestBody);
 
-                    client.DefaultRequestHeaders.Add("apikey", ApiKey);
+                    client.DefaultRequestHeaders.Add("apikey", SGBCancelApikey);
                     client.DefaultRequestHeaders.Add("user", "DEV");
 
                     var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/Service/RegisIMEI", content);
+                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgbmobilecare/api/v1/policy/cancelpolicy", content);
                     int DeviceStatusCode = (int)responseDevice.StatusCode;
                     Log.Debug("API RETURN : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
                     if (responseDevice.IsSuccessStatusCode)

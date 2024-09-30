@@ -9,7 +9,8 @@ namespace App.Models
         public string approvalStatus { get; set; }
         public string approvalDatetime { get; set; }
         public string remark { get; set; }
-
+        public string Accountno { get; set; }
+        
     }
 
     public class C100StatusRp
@@ -121,7 +122,8 @@ namespace App.Models
         public string? cusMobile { get; set; }
         public string? SaleName { get; set; }
         public string? SaleTelephoneNo { get; set; }
-
+        public string? RefCode { get; set; }
+        
     }
 
 
