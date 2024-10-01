@@ -268,10 +268,10 @@ namespace App.Controllers
                     ISNULL(LEFT(appex.OU_Code, 3),'') AS OU_Code,
                     appex.loanTypeCate,
                     bank.ref4 AS Ref4,
-                    ISNULL(appIns.ApplicationID,'') AS appIns
+                    '' as AS appIns --ISNULL(appIns.ApplicationID,'') AS appIns
                 FROM {DATABASEK2}.[Application] a WITH (NOLOCK)
                 INNER JOIN {DATABASEK2}.[ApplicationExtend] appex WITH (NOLOCK) ON appex.ApplicationID = a.ApplicationID
-                LEFT JOIN {DATABASEK2}.[ApplicationInsurance] appIns WITH (NOLOCK) ON appIns.ApplicationID = a.ApplicationID
+                --LEFT JOIN {DATABASEK2}.[ApplicationInsurance] appIns WITH (NOLOCK) ON appIns.ApplicationID = a.ApplicationID
                 LEFT JOIN {DATABASEK2}.[Customer] cus WITH (NOLOCK) ON cus.CustomerID = a.CustomerID
                 LEFT JOIN {DATABASEK2}.[Application_ESIG_STATUS] c WITH (NOLOCK) ON a.ApplicationCode = c.APPLICATION_CODE
                 LEFT JOIN #CONTRACTS_TEMP con WITH (NOLOCK) ON a.ApplicationCode = con.documentno
@@ -447,12 +447,12 @@ namespace App.Controllers
                 if (string.IsNullOrEmpty(ResultDescription))
                 {
                     //ถ้าเป็น SGB
-                   /* if (!string.IsNullOrEmpty(_GetApplicationRespone.appIns))
+                    if (!string.IsNullOrEmpty(_GetApplicationRespone.appIns))
                     {
                         SGBCancelRespone sGBCancelRespone = new SGBCancelRespone();
                         sGBCancelRespone = await SGBCancel(_GetApplication);
-                    }*/
- 
+                    }
+
 
                     string currentDateTime = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
                     var requestBody = new
