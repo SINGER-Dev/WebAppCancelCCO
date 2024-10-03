@@ -98,8 +98,10 @@ namespace App.Controllers
             GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
 
 
+
+
             formCancelModel.AccountNo = _GetApplicationRespone.AccountNo;
-            formCancelModel.ApplicationCode = _GetApplicationRespone.ApplicationCode;
+            formCancelModel.ApplicationCode = ApplicationCode;
             formCancelModel.SaleDepCode = _GetApplicationRespone.SaleDepCode;
             formCancelModel.SaleDepName = _GetApplicationRespone.SaleDepName;
             formCancelModel.ProductModelName = _GetApplicationRespone.ProductModelName;
@@ -268,7 +270,7 @@ namespace App.Controllers
                     ISNULL(LEFT(appex.OU_Code, 3),'') AS OU_Code,
                     appex.loanTypeCate,
                     bank.ref4 AS Ref4,
-                    '' as AS appIns --ISNULL(appIns.ApplicationID,'') AS appIns
+                    '' as appIns --ISNULL(appIns.ApplicationID,'') AS appIns
                 FROM {DATABASEK2}.[Application] a WITH (NOLOCK)
                 INNER JOIN {DATABASEK2}.[ApplicationExtend] appex WITH (NOLOCK) ON appex.ApplicationID = a.ApplicationID
                 --LEFT JOIN {DATABASEK2}.[ApplicationInsurance] appIns WITH (NOLOCK) ON appIns.ApplicationID = a.ApplicationID
@@ -422,7 +424,7 @@ namespace App.Controllers
                     {
                         sqlCommand.CommandType = CommandType.StoredProcedure;
                         sqlCommand.CommandTimeout = 120; // Set timeout to 120 seconds
-                        sqlCommand.Parameters.AddWithValue("ApplicationCode", _GetApplicationRespone.ApplicationCode);
+                        sqlCommand.Parameters.AddWithValue("ApplicationCode", _FormConfirmModel.ApplicationCode);
                         sqlCommand.Parameters.AddWithValue("Remark", _FormConfirmModel.Remark + " " + _FormConfirmModel.Other);
                         sqlCommand.Parameters.AddWithValue("CANCEL_USER", HttpContext.Session.GetString("EMP_CODE"));
                         sqlCommand.Parameters.AddWithValue("Except_IMEI", _FormConfirmModel.ExceptIMEI);
