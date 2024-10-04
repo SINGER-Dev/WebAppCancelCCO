@@ -883,7 +883,7 @@ namespace App.Controllers
                         applicationStatus = _requestBodyValue.applicationStatus,
                         approvalStatus = _requestBodyValue.approvalStatus,
                         approvalDatetime = _requestBodyValue.approvalDatetime,
-                        remark = "เลขใบคำขอ : "+_requestBodyValue.applicationCode+" เลขที่สัญญา : " + dt.Rows[0]["Accountno"].ToString(),
+                        remark = "",
                         losApplicationCode = _requestBodyValue.applicationCode,
                         contractNo = dt.Rows[0]["Accountno"].ToString()
                     };
