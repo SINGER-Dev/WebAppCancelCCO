@@ -243,9 +243,9 @@ namespace App.Controllers
                     a.ApprovedDate,
                     CASE 
                         WHEN appex.loanTypeCate = 'HP' THEN N'เรียบร้อย'
-                        WHEN regis.numregis > 0 THEN N'เรียบร้อย'
+                        WHEN isnull(regis.IMEI,'') <> '' THEN N'เรียบร้อย'
                         ELSE N'รอลงทะเบียน' 
-                    END AS NumRegis,
+                    END AS numregis,
                     CASE 
                         WHEN c.ESIG_CONFIRM_STATUS = '1' AND con.signedStatus = 'COMP-Done' THEN N'เรียบร้อย'
                         WHEN c.ESIG_CONFIRM_STATUS = '0' OR con.signedStatus = 'Initial' THEN N'รอลงนาม'
@@ -270,26 +270,20 @@ namespace App.Controllers
                     ISNULL(LEFT(appex.OU_Code, 3),'') AS OU_Code,
                     appex.loanTypeCate,
                     bank.ref4 AS Ref4,
-                    '' as appIns --ISNULL(appIns.ApplicationID,'') AS appIns
+                    '' as appIns, --ISNULL(appIns.ApplicationID,'') AS appIns
+                    ISNULL(regis.Status,'NULL') AS  Status
                 FROM {DATABASEK2}.[Application] a WITH (NOLOCK)
                 INNER JOIN {DATABASEK2}.[ApplicationExtend] appex WITH (NOLOCK) ON appex.ApplicationID = a.ApplicationID
                 --LEFT JOIN {DATABASEK2}.[ApplicationInsurance] appIns WITH (NOLOCK) ON appIns.ApplicationID = a.ApplicationID
                 LEFT JOIN {DATABASEK2}.[Customer] cus WITH (NOLOCK) ON cus.CustomerID = a.CustomerID
                 LEFT JOIN {DATABASEK2}.[Application_ESIG_STATUS] c WITH (NOLOCK) ON a.ApplicationCode = c.APPLICATION_CODE
+				LEFT JOIN {DATABASEK2}.[ApplicationRegisIMIE] regis WITH (NOLOCK) ON regis.IMEI = a.ProductSerialNo and regis.Status IN ('REGISTER DEVICE SUCCESS', 'ALREADY REGISTERED')
                 LEFT JOIN #CONTRACTS_TEMP con WITH (NOLOCK) ON a.ApplicationCode = con.documentno
                 LEFT JOIN (
                     SELECT COUNT(documentno) AS numdoc, documentno
                     FROM #CONTRACTS_TEMP WITH (NOLOCK)
                     GROUP BY documentno
                 ) checkcon ON checkcon.documentno = a.ApplicationCode
-                LEFT JOIN (
-                    SELECT 
-                        CASE WHEN COUNT(IMEI) = 0 THEN 0 ELSE 1 END AS numregis, 
-                        IMEI 
-                    FROM {DATABASEK2}.[ApplicationRegisIMIE] WITH (NOLOCK)
-                    WHERE Status IN ('REGISTER DEVICE SUCCESS', 'ALREADY REGISTERED')
-                    GROUP BY IMEI
-                ) regis ON regis.IMEI = a.ProductSerialNo
                 LEFT JOIN (
                     SELECT COUNT(ARM_ACC_NO) AS newnum, ARM_ACC_NO, arm_Loaded_flag
                     FROM {DATABASEK2}.[ARM_T_NEWSALES] WITH (NOLOCK)
@@ -329,11 +323,11 @@ namespace App.Controllers
                   AND (@ProductSerialNo IS NULL OR a.ProductSerialNo = @ProductSerialNo)
                   AND (@CustomerID IS NULL OR a.CustomerID = @CustomerID)
                   AND (@CustomerName IS NULL OR cus.FirstName + ' ' + cus.LastName LIKE '%' + @CustomerName + '%')
-                  AND (ISNULL(@StatusRegis, '') = '' OR ISNULL(regis.numregis, '0') = @StatusRegis)
                 ORDER BY a.ApplicationDate DESC;
 
                 -- Drop temporary table
                 DROP TABLE #CONTRACTS_TEMP;";
+
 
                     var parameters = new
                     {
@@ -345,8 +339,7 @@ namespace App.Controllers
                         ApplicationCode = _ApplicationModel.ApplicationCode,
                         ProductSerialNo = _ApplicationModel.ProductSerialNo,
                         CustomerID = _ApplicationModel.CustomerID,
-                        CustomerName = _ApplicationModel.CustomerName,
-                        StatusRegis = _ApplicationModel.StatusRegis
+                        CustomerName = _ApplicationModel.CustomerName
                     };
 
                     var commandDefinition = new CommandDefinition(sql, parameters, commandTimeout: 300); // Timeout in seconds
@@ -354,18 +347,40 @@ namespace App.Controllers
 
                     var applications = connection.Query<ApplicationResponeModel>(commandDefinition);
 
+                    // กำหนดค่าที่ต้องการตรวจสอบ
+
+                    string[] validStatuses;
+
+                    if (_ApplicationModel.StatusRegis == "1")
+                    {
+                        validStatuses = new string[] { "REGISTER DEVICE SUCCESS", "ALREADY REGISTERED" };
+                    }
+                    else if (_ApplicationModel.StatusRegis == "0")
+                    {
+                        validStatuses = new string[] { "NULL" };
+                    }
+                    else
+                    {
+                        validStatuses = new string[] { "REGISTER DEVICE SUCCESS", "ALREADY REGISTERED", "NULL" };
+                    }
+
+
                     foreach (var application in applications)
                     {
-                        string datenowText = DateTime.Now.ToString("yyyy-MM-dd", new CultureInfo("en-US"));
-                        if (application.ApplicationDate.ToString() == datenowText)
+                        if (Array.Exists(validStatuses, element => element == application.Status.ToUpper()))
                         {
-                            application.datenowcheck = "1";
+                            string datenowText = DateTime.Now.ToString("yyyy-MM-dd", new CultureInfo("en-US"));
+                            if (application.ApplicationDate.ToString() == datenowText)
+                            {
+                                application.datenowcheck = "1";
+                            }
+                            else
+                            {
+                                application.datenowcheck = "0";
+                            }
+                            _ApplicationResponeModelMaster.Add(application);
                         }
-                        else
-                        {
-                            application.datenowcheck = "0";
-                        }
-                        _ApplicationResponeModelMaster.Add(application);
+
                     }
 
                 }
