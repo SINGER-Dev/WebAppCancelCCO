@@ -61,6 +61,16 @@ namespace App.Models
     {
         public string ApplicationCode { get; set; }
     }
+
+    public class GetSendEsignatureStatusSGFinance
+    {
+        public string? ApplicationCode { get; set; }
+        public string? EsignatureConfirmStatus { get; set; }
+        public string? EsignatureConfirmDate { get; set; }
+        public string? ReceiveConfirmStatus { get; set; }
+        public string? ReceiveConfirmDate { get; set; }
+    }
+
     public class ApplicationRq
     {
         public string AccountNo { get; set; }

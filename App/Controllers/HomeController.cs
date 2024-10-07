@@ -271,7 +271,11 @@ namespace App.Controllers
                     appex.loanTypeCate,
                     bank.ref4 AS Ref4,
                     '' as appIns, --ISNULL(appIns.ApplicationID,'') AS appIns
-                    ISNULL(regis.Status,'NULL') AS  Status
+                    CASE 
+                        WHEN ISNULL(regis.Status,'NULL') = 'REGISTER DEVICE SUCCESS' THEN 'REGISTER DEVICE SUCCESS'
+                        WHEN ISNULL(regis.Status,'NULL') = 'ALREADY REGISTERED' THEN 'REGISTER DEVICE SUCCESS'
+                        ELSE 'NULL'
+                    END AS  Status
                 FROM {DATABASEK2}.[Application] a WITH (NOLOCK)
                 INNER JOIN {DATABASEK2}.[ApplicationExtend] appex WITH (NOLOCK) ON appex.ApplicationID = a.ApplicationID
                 --LEFT JOIN {DATABASEK2}.[ApplicationInsurance] appIns WITH (NOLOCK) ON appIns.ApplicationID = a.ApplicationID
@@ -288,7 +292,7 @@ namespace App.Controllers
                     SELECT COUNT(ARM_ACC_NO) AS newnum, ARM_ACC_NO, arm_Loaded_flag
                     FROM {DATABASEK2}.[ARM_T_NEWSALES] WITH (NOLOCK)
                     WHERE CREATED_USER = 'SG Finance'
-                      AND (CONVERT(date,CREATED_DATE,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '')
+                    AND (CONVERT(date,CREATED_DATE,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '')
 					AND (CONVERT(date,CREATED_DATE,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
                     GROUP BY ARM_ACC_NO, arm_Loaded_flag
                 ) new ON new.ARM_ACC_NO = a.AccountNo
@@ -296,7 +300,7 @@ namespace App.Controllers
                     SELECT COUNT(ARM_ACC_NO) AS paynum, ARM_ACC_NO, ARM_RECEIPT_STAT
                     FROM {DATABASEK2}.[ARM_T_PAYMENT] WITH (NOLOCK)
                     WHERE CREATED_USER = 'SG Finance'
-                     AND (CONVERT(date,CREATED_DATE,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '')
+                    AND (CONVERT(date,CREATED_DATE,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '')
 					AND (CONVERT(date,CREATED_DATE,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
                     GROUP BY ARM_ACC_NO, ARM_RECEIPT_STAT
                 ) pay ON pay.ARM_ACC_NO = a.AccountNo
@@ -367,7 +371,8 @@ namespace App.Controllers
 
                     foreach (var application in applications)
                     {
-                        if (Array.Exists(validStatuses, element => element == application.Status.ToUpper()))
+                        bool exists = _ApplicationResponeModelMaster.Any(m => m.ApplicationCode == application.ApplicationCode);
+                        if (!exists && Array.Exists(validStatuses, element => element == application.Status.ToUpper()))
                         {
                             string datenowText = DateTime.Now.ToString("yyyy-MM-dd", new CultureInfo("en-US"));
                             if (application.ApplicationDate.ToString() == datenowText)
@@ -995,38 +1000,65 @@ namespace App.Controllers
             GetOuCodeRespone _GetOuCodeRespone = new GetOuCodeRespone();
             try
             {
+                SqlConnection connection = new SqlConnection();
+                connection.ConnectionString = strConnString;
+                connection.Open();
+                SqlCommand sqlCommand;
+                string strSQL = DATABASEK2 + ".[GetSendEsignatureStatusSGFinance]";
+                sqlCommand = new SqlCommand(strSQL, connection);
+                sqlCommand.CommandType = CommandType.StoredProcedure;
+                sqlCommand.Parameters.AddWithValue("ApplicationCode", _C100StatusRq.ApplicationCode);
 
-                var requestBody = new
+                SqlDataAdapter dtAdapter = new SqlDataAdapter();
+                dtAdapter.SelectCommand = sqlCommand;
+                DataTable dt = new DataTable();
+                dtAdapter.Fill(dt);
+                connection.Close();
+                sqlCommand.Parameters.Clear();
+
+                if (dt.Rows.Count > 0)
                 {
-                    APPLICATION_CODE = _C100StatusRq.ApplicationCode
-                };
+                    Log.Debug(JsonConvert.SerializeObject(dt));
 
-                Log.Debug("API REQUEST : " + JsonConvert.SerializeObject(requestBody));
+                    GetSendEsignatureStatusSGFinance _requestBodyValue = JsonConvert.DeserializeObject<GetSendEsignatureStatusSGFinance>(dt.Rows[0]["StatusDesc"].ToString());
 
-
-                using (HttpClient client = new HttpClient())
-                {
-                    string jsonBody = JsonConvert.SerializeObject(requestBody);
-
-                    client.DefaultRequestHeaders.Add("apikey", ApiKey);
-                    client.DefaultRequestHeaders.Add("user", "DEV");
-
-                    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-
-                    HttpResponseMessage responseDevice;
-
-                    responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/SubmitSale", content);
-
-
-                    int DeviceStatusCode = (int)responseDevice.StatusCode;
-
-                    Log.Debug("API RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
-
-                    if (responseDevice.IsSuccessStatusCode)
+                    
+                    var requestBody = new
                     {
-                        var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
+                        ApplicationCode = _requestBodyValue.ApplicationCode,
+                        EsignatureConfirmStatus = _requestBodyValue.ApplicationCode,
+                        EsignatureConfirmDate = _requestBodyValue.ApplicationCode,
+                        ReceiveConfirmStatus = _requestBodyValue.ApplicationCode,
+                        ReceiveConfirmDate = _requestBodyValue.ApplicationCode
+                    };
 
-                        _MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
+                    Log.Debug("API REQUEST : " + JsonConvert.SerializeObject(requestBody));
+
+
+                    using (HttpClient client = new HttpClient())
+                    {
+                        string jsonBody = JsonConvert.SerializeObject(requestBody);
+
+                        client.DefaultRequestHeaders.Add("apikey", ApiKey);
+                        client.DefaultRequestHeaders.Add("user", "DEV");
+
+                        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+
+                        HttpResponseMessage responseDevice;
+
+                        responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/api/v1/SendEsignatureStatus", content);
+
+
+                        int DeviceStatusCode = (int)responseDevice.StatusCode;
+
+                        Log.Debug("API RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+
+                        if (responseDevice.IsSuccessStatusCode)
+                        {
+                            var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
+
+                            _MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
+                        }
                     }
                 }
                 //}
