@@ -1,4 +1,4 @@
-using App.Models;
+Ôªøusing App.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using System.Data;
@@ -198,140 +198,123 @@ namespace App.Controllers
                     connection.Open();
 
                     var sql = @$"
-                -- Step 1: Insert into temporary table
-                SELECT signedStatus, statusReceived, documentno
-                INTO #CONTRACTS_TEMP
-                FROM {SGCESIGNATURE}.[contracts] WITH (NOLOCK)
-                where   (CONVERT(nvarchar,createdAt,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '') 
-			    AND (CONVERT(nvarchar,createdAt,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
+                    -- Step 1: Insert into temporary table
+                    SELECT signedStatus, statusReceived, documentno
+                    INTO #CONTRACTS_TEMP
+                    FROM {SGCESIGNATURE}.[contracts] WITH (NOLOCK)
+                    where   (CONVERT(nvarchar,createdAt,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '') 
+                    AND (CONVERT(nvarchar,createdAt,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
 
-                -- Step 2: Main query
-                SELECT 
-                    a.ApplicationID,
-                    a.ApplicationCode,
-                    a.AccountNo,
-                    a.SaleDepCode,
-                    a.SaleDepName,
-                    CONVERT(NVARCHAR, a.ApplicationDate, 20) AS ApplicationDate,
-                    CONVERT(NVARCHAR, a.ApplicationDate, 20) AS ApplicationDate2,
-                    a.ProductID,
-                    a.ProductModelName,
-                    a.CustomerID,
-                    cus.FirstName + ' ' + cus.LastName AS Cusname,
-                    cus.MobileNo1 AS CusMobile,
-                    a.SaleName,
-                    a.SaleTelephoneNo,
-                     ISNULL(CASE 
-                        WHEN EXISTS (SELECT 1 FROM {SGDIRECT}.[AUTO_SALE_POS_SERIAL] s WITH (NOLOCK)
-                                     WHERE s.AppOrderNo = a.ApplicationCode) 
-                        THEN (SELECT STUFF((SELECT ', ' + s.ItemSerial
-                                            FROM {SGDIRECT}.[AUTO_SALE_POS_SERIAL] s WITH (NOLOCK)
-                                            WHERE s.AppOrderNo = a.ApplicationCode
-                                            FOR XML PATH('')), 1, 1, ''))
-                        ELSE a.ProductSerialNo
-                    END,'') AS ProductSerialNo,
-                    a.ApplicationStatusID,
-                    CASE 
-                        WHEN con.signedStatus = 'COMP-Done' THEN N'‡√’¬∫√ÈÕ¬' 
-                        WHEN con.signedStatus = 'Initial' THEN N'√Õ≈ßπ“¡'
-                        WHEN ISNULL(con.signedStatus, 'NULL') = 'NULL' THEN N'-'
-                        ELSE con.signedStatus 
-                    END AS signedStatus,
-                    CASE WHEN ISNULL(con.statusReceived, '0') = '1' THEN N'√—∫ ‘π§È“·≈È«' ELSE N'¬—ß‰¡Ë√—∫ ‘π§È“' END AS StatusReceived,
-                    CASE WHEN ISNULL(c.ESIG_CONFIRM_STATUS, '0') = '1' THEN N'‡√’¬∫√ÈÕ¬' ELSE N'√Õ≈ßπ“¡' END AS ESIG_CONFIRM_STATUS,
-                    CASE WHEN ISNULL(c.RECEIVE_FLAG, '0') = '1' THEN N'√—∫ ‘π§È“·≈È«' ELSE N'√Õ≈ßπ“¡' END AS RECEIVE_FLAG,
-                    a.ApprovedDate,
-                    CASE 
-                        WHEN appex.loanTypeCate = 'HP' THEN N'‡√’¬∫√ÈÕ¬'
-                        WHEN isnull(regis.IMEI,'') <> '' THEN N'‡√’¬∫√ÈÕ¬'
-                        ELSE N'√Õ≈ß∑–‡∫’¬π' 
-                    END AS numregis,
-                    CASE 
-                        WHEN c.ESIG_CONFIRM_STATUS = '1' AND con.signedStatus = 'COMP-Done' THEN N'‡√’¬∫√ÈÕ¬'
-                        WHEN c.ESIG_CONFIRM_STATUS = '0' OR con.signedStatus = 'Initial' THEN N'√Õ≈ßπ“¡'
-                        ELSE N'≈ßπ“¡‰¡Ë ”‡√Á®' 
-                    END AS SignedText,
-                    CASE WHEN checkcon.numdoc > 1 THEN N'æ∫√“¬°“√´È”' ELSE N'ª°µ‘' END AS NumDoc,
-                    CASE 
-                        WHEN new.newnum = 1 AND new.arm_Loaded_flag IN (0, 1) THEN N'‡√’¬∫√ÈÕ¬'
-                        WHEN new.newnum = 1 AND new.arm_Loaded_flag = 2 THEN N'CANCELLED'
-                        WHEN new.newnum > 1 THEN N'√“¬°“√´È”'
-                        ELSE N'‰¡Ëæ∫√“¬°“√' 
-                    END AS NewNum,
-                    CASE 
-                        WHEN pay.paynum = 1 AND pay.ARM_RECEIPT_STAT = 'APPROVED' THEN N'‡√’¬∫√ÈÕ¬'
-                        WHEN pay.paynum = 1 AND pay.ARM_RECEIPT_STAT = 'CANCELLED' THEN N'CANCELLED'
-                        WHEN pay.paynum > 1 THEN N'√“¬°“√´È”'
-                        ELSE N'‰¡Ëæ∫√“¬°“√' 
-                    END AS PayNum,
-                    '' AS LINE_STATUS,
-                    '' AS TRANSFER_DATE,
-                    appex.RefCode,
-                    ISNULL(LEFT(appex.OU_Code, 3),'') AS OU_Code,
-                    appex.loanTypeCate,
-                    bank.ref4 AS Ref4,
-                    '' as appIns, --ISNULL(appIns.ApplicationID,'') AS appIns
-                    CASE 
-                        WHEN ISNULL(regis.Status,'NULL') = 'REGISTER DEVICE SUCCESS' THEN 'REGISTER DEVICE SUCCESS'
-                        WHEN ISNULL(regis.Status,'NULL') = 'ALREADY REGISTERED' THEN 'REGISTER DEVICE SUCCESS'
-                        ELSE 'NULL'
-                    END AS  Status
-                FROM {DATABASEK2}.[Application] a WITH (NOLOCK)
-                INNER JOIN {DATABASEK2}.[ApplicationExtend] appex WITH (NOLOCK) ON appex.ApplicationID = a.ApplicationID
-                --LEFT JOIN {DATABASEK2}.[ApplicationInsurance] appIns WITH (NOLOCK) ON appIns.ApplicationID = a.ApplicationID
-                LEFT JOIN {DATABASEK2}.[Customer] cus WITH (NOLOCK) ON cus.CustomerID = a.CustomerID
-                LEFT JOIN {DATABASEK2}.[Application_ESIG_STATUS] c WITH (NOLOCK) ON a.ApplicationCode = c.APPLICATION_CODE
-				LEFT JOIN {DATABASEK2}.[ApplicationRegisIMIE] regis WITH (NOLOCK) ON regis.IMEI = a.ProductSerialNo and regis.Status IN ('REGISTER DEVICE SUCCESS', 'ALREADY REGISTERED')
-                LEFT JOIN #CONTRACTS_TEMP con WITH (NOLOCK) ON a.ApplicationCode = con.documentno
-                LEFT JOIN (
-                    SELECT COUNT(documentno) AS numdoc, documentno
-                    FROM #CONTRACTS_TEMP WITH (NOLOCK)
-                    GROUP BY documentno
-                ) checkcon ON checkcon.documentno = a.ApplicationCode
-                LEFT JOIN (
-                    SELECT COUNT(ARM_ACC_NO) AS newnum, ARM_ACC_NO, arm_Loaded_flag
-                    FROM {DATABASEK2}.[ARM_T_NEWSALES] WITH (NOLOCK)
-                    WHERE CREATED_USER = 'SG Finance'
-                    AND (CONVERT(date,CREATED_DATE,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '')
-					AND (CONVERT(date,CREATED_DATE,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
-                    GROUP BY ARM_ACC_NO, arm_Loaded_flag
-                ) new ON new.ARM_ACC_NO = a.AccountNo
-                LEFT JOIN (
-                    SELECT COUNT(ARM_ACC_NO) AS paynum, ARM_ACC_NO, ARM_RECEIPT_STAT
-                    FROM {DATABASEK2}.[ARM_T_PAYMENT] WITH (NOLOCK)
-                    WHERE CREATED_USER = 'SG Finance'
-                    AND (CONVERT(date,CREATED_DATE,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '')
-					AND (CONVERT(date,CREATED_DATE,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
-                    GROUP BY ARM_ACC_NO, ARM_RECEIPT_STAT
-                ) pay ON pay.ARM_ACC_NO = a.AccountNo
-                LEFT JOIN (SELECT a.applicationid,
-                                  a.applicationcode,
-                                  a.ref4,
-                                  p.amt_shp_pay,
-                                  p.amt_paid,
-                                    p.flag_status
-                           FROM {DATABASEK2}.[application] a WITH (NOLOCK)
-                           INNER JOIN {DATABASEK2}.[applicationextend] e WITH (NOLOCK)
-                               ON a.applicationid = e.applicationid
-                           INNER JOIN {SGCROSSBANK}.[sg_payment_realtime] p WITH (NOLOCK)
-                               ON a.ref4 = p.ref1
-                           WHERE p.flag_status = 'Y' AND ISNULL(a.ref4, '') <> ''
-                ) bank ON bank.applicationcode = a.applicationcode
-                WHERE (CONVERT(date,a.ApplicationDate,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '')
-                  AND (CONVERT(date,a.ApplicationDate,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
-                  AND (@status IS NULL OR a.ApplicationStatusID = @status)
-                  AND (@loanTypeCate IS NULL OR appex.loanTypeCate = @loanTypeCate)
-                  AND a.ApplicationDate >= '2024-05-01'
-                  AND (@AccountNo IS NULL OR a.AccountNo = @AccountNo)
-                  AND (@ApplicationCode IS NULL OR a.ApplicationCode = @ApplicationCode OR appex.RefCode = @ApplicationCode)
-                  AND (@ProductSerialNo IS NULL OR a.ProductSerialNo = @ProductSerialNo)
-                  AND (@CustomerID IS NULL OR a.CustomerID = @CustomerID)
-                  AND (@CustomerName IS NULL OR cus.FirstName + ' ' + cus.LastName LIKE '%' + @CustomerName + '%')
-                ORDER BY a.ApplicationDate DESC;
+                    -- Step 2: Main query
+                    SELECT 
+                        a.ApplicationID,
+                        a.ApplicationCode,
+                        a.AccountNo,
+                        a.SaleDepCode,
+                        a.SaleDepName,
+                        CONVERT(NVARCHAR, a.ApplicationDate, 20) AS ApplicationDate,
+                        CONVERT(NVARCHAR, a.ApplicationDate, 20) AS ApplicationDate2,
+                        a.ProductID,
+                        a.ProductModelName,
+                        a.CustomerID,
+                        cus.FirstName + ' ' + cus.LastName AS Cusname,
+                        cus.MobileNo1 AS CusMobile,
+                        a.SaleName,
+                        a.SaleTelephoneNo,
+                         ISNULL(CASE 
+                            WHEN EXISTS (SELECT 1 FROM {SGDIRECT}.[AUTO_SALE_POS_SERIAL] s WITH (NOLOCK)
+                                         WHERE s.AppOrderNo = a.ApplicationCode) 
+                            THEN (SELECT STUFF((SELECT ', ' + s.ItemSerial
+                                                FROM {SGDIRECT}.[AUTO_SALE_POS_SERIAL] s WITH (NOLOCK)
+                                                WHERE s.AppOrderNo = a.ApplicationCode
+                                                FOR XML PATH('')), 1, 1, ''))
+                            ELSE a.ProductSerialNo
+                        END,'') AS ProductSerialNo,
+                        a.ApplicationStatusID,
+                        CASE 
+                            WHEN con.signedStatus = 'COMP-Done' THEN N'‡πÄ‡∏£‡∏µ‡∏¢‡∏ö‡∏£‡πâ‡∏≠‡∏¢' 
+                            WHEN con.signedStatus = 'Initial' THEN N'‡∏£‡∏≠‡∏•‡∏á‡∏ô‡∏≤‡∏°'
+                            WHEN ISNULL(con.signedStatus, 'NULL') = 'NULL' THEN N'-'
+                            ELSE con.signedStatus 
+                        END AS signedStatus,
+                        CASE WHEN ISNULL(con.statusReceived, '0') = '1' THEN N'‡∏£‡∏±‡∏ö‡∏™‡∏¥‡∏ô‡∏Ñ‡πâ‡∏≤‡πÅ‡∏•‡πâ‡∏ß' ELSE N'‡∏¢‡∏±‡∏á‡πÑ‡∏°‡πà‡∏£‡∏±‡∏ö‡∏™‡∏¥‡∏ô‡∏Ñ‡πâ‡∏≤' END AS StatusReceived,
+                        CASE WHEN ISNULL(c.ESIG_CONFIRM_STATUS, '0') = '1' THEN N'‡πÄ‡∏£‡∏µ‡∏¢‡∏ö‡∏£‡πâ‡∏≠‡∏¢'  ELSE N'‡∏£‡∏≠‡∏•‡∏á‡∏ô‡∏≤‡∏°' END AS ESIG_CONFIRM_STATUS,
+                        CASE WHEN ISNULL(c.RECEIVE_FLAG, '0') = '1' THEN N'‡∏£‡∏±‡∏ö‡∏™‡∏¥‡∏ô‡∏Ñ‡πâ‡∏≤‡πÅ‡∏•‡πâ‡∏ß' ELSE N'‡∏£‡∏≠‡∏•‡∏á‡∏ô‡∏≤‡∏°' END AS RECEIVE_FLAG,
+                        a.ApprovedDate,
+                        CASE 
+                            WHEN appex.loanTypeCate = 'HP' THEN N'‡πÄ‡∏£‡∏µ‡∏¢‡∏ö‡∏£‡πâ‡∏≠‡∏¢' 
+                            WHEN isnull(regis.IMEI,'') <> '' THEN N'‡πÄ‡∏£‡∏µ‡∏¢‡∏ö‡∏£‡πâ‡∏≠‡∏¢' 
+                            ELSE N'‡∏£‡∏≠‡∏•‡∏á‡∏ó‡∏∞‡πÄ‡∏ö‡∏µ‡∏¢‡∏ô' 
+                        END AS numregis,
+                        CASE 
+                            WHEN c.ESIG_CONFIRM_STATUS = '1' AND con.signedStatus = 'COMP-Done' THEN N'‡πÄ‡∏£‡∏µ‡∏¢‡∏ö‡∏£‡πâ‡∏≠‡∏¢' 
+                            WHEN c.ESIG_CONFIRM_STATUS = '0' OR con.signedStatus = 'Initial' THEN N'‡∏£‡∏≠‡∏•‡∏á‡∏ô‡∏≤‡∏°'
+                            ELSE N'‡∏•‡∏á‡∏ô‡∏≤‡∏°‡πÑ‡∏°‡πà‡∏™‡∏≥‡πÄ‡∏£‡πá‡∏à' 
+                        END AS SignedText,
+                        CASE WHEN checkcon.numdoc > 1 THEN N'‡∏û‡∏ö‡∏£‡∏≤‡∏¢‡∏Å‡∏≤‡∏£‡∏ã‡πâ‡∏≥' ELSE N'‡∏õ‡∏Å‡∏ï‡∏¥' END AS NumDoc,
+                        CASE 
+                            WHEN new.newnum = 1 AND new.arm_Loaded_flag IN (0, 1) THEN N'‡πÄ‡∏£‡∏µ‡∏¢‡∏ö‡∏£‡πâ‡∏≠‡∏¢' 
+                            WHEN new.newnum = 1 AND new.arm_Loaded_flag = 2 THEN N'CANCELLED'
+                            WHEN new.newnum > 1 THEN N'‡∏£‡∏≤‡∏¢‡∏Å‡∏≤‡∏£‡∏ã‡πâ‡∏≥'
+                            ELSE N'‡πÑ‡∏°‡πà‡∏û‡∏ö‡∏£‡∏≤‡∏¢‡∏Å‡∏≤‡∏£' 
+                        END AS NewNum,
+                        CASE 
+                            WHEN pay.paynum = 1 AND pay.ARM_RECEIPT_STAT = 'APPROVED' THEN N'‡πÄ‡∏£‡∏µ‡∏¢‡∏ö‡∏£‡πâ‡∏≠‡∏¢' 
+                            WHEN pay.paynum = 1 AND pay.ARM_RECEIPT_STAT = 'CANCELLED' THEN N'CANCELLED'
+                            WHEN pay.paynum > 1 THEN N'‡∏£‡∏≤‡∏¢‡∏Å‡∏≤‡∏£‡∏ã‡πâ‡∏≥'
+                            ELSE N'‡πÑ‡∏°‡πà‡∏û‡∏ö‡∏£‡∏≤‡∏¢‡∏Å‡∏≤‡∏£' 
+                        END AS PayNum,
+                        '' AS LINE_STATUS,
+                        '' AS TRANSFER_DATE,
+                        appex.RefCode,
+                        ISNULL(LEFT(appex.OU_Code, 3),'') AS OU_Code,
+                        appex.loanTypeCate,
+                        'DUMMY' AS Ref4,
+                        '' as appIns, --ISNULL(appIns.ApplicationID,'') AS appIns
+                        ISNULL(regis.Status,'NULL') AS  Status
+                    FROM {DATABASEK2}.[Application] a WITH (NOLOCK)
+                    INNER JOIN {DATABASEK2}.[ApplicationExtend] appex WITH (NOLOCK) ON appex.ApplicationID = a.ApplicationID
+                    --LEFT JOIN {DATABASEK2}.[ApplicationInsurance] appIns WITH (NOLOCK) ON appIns.ApplicationID = a.ApplicationID
+                    LEFT JOIN {DATABASEK2}.[Customer] cus WITH (NOLOCK) ON cus.CustomerID = a.CustomerID
+                    LEFT JOIN {DATABASEK2}.[Application_ESIG_STATUS] c WITH (NOLOCK) ON a.ApplicationCode = c.APPLICATION_CODE
+                    LEFT JOIN {DATABASEK2}.[ApplicationRegisIMIE] regis WITH (NOLOCK) ON regis.IMEI = a.ProductSerialNo and regis.Status IN ('REGISTER DEVICE SUCCESS', 'ALREADY REGISTERED')
+                    LEFT JOIN #CONTRACTS_TEMP con WITH (NOLOCK) ON a.ApplicationCode = con.documentno
+                    LEFT JOIN (
+                        SELECT COUNT(documentno) AS numdoc, documentno
+                        FROM #CONTRACTS_TEMP WITH (NOLOCK)
+                        GROUP BY documentno
+                    ) checkcon ON checkcon.documentno = a.ApplicationCode
+                    LEFT JOIN (
+                        SELECT COUNT(ARM_ACC_NO) AS newnum, ARM_ACC_NO, arm_Loaded_flag
+                        FROM {DATABASEK2}.[ARM_T_NEWSALES] WITH (NOLOCK)
+                        WHERE CREATED_USER = 'SG Finance'
+                          AND (CONVERT(date,CREATED_DATE,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '')
+				                    AND (CONVERT(date,CREATED_DATE,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
+                        GROUP BY ARM_ACC_NO, arm_Loaded_flag
+                    ) new ON new.ARM_ACC_NO = a.AccountNo
+                    LEFT JOIN (
+                        SELECT COUNT(ARM_ACC_NO) AS paynum, ARM_ACC_NO, ARM_RECEIPT_STAT
+                        FROM {DATABASEK2}.[ARM_T_PAYMENT] WITH (NOLOCK)
+                        WHERE CREATED_USER = 'SG Finance'
+                         AND (CONVERT(date,CREATED_DATE,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '')
+				                    AND (CONVERT(date,CREATED_DATE,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
+                        GROUP BY ARM_ACC_NO, ARM_RECEIPT_STAT
+                    ) pay ON pay.ARM_ACC_NO = a.AccountNo
 
-                -- Drop temporary table
-                DROP TABLE #CONTRACTS_TEMP;";
+                    WHERE (CONVERT(date,a.ApplicationDate,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '')
+                      AND (CONVERT(date,a.ApplicationDate,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
+                      AND (@status IS NULL OR a.ApplicationStatusID = @status)
+                      AND (@loanTypeCate IS NULL OR appex.loanTypeCate = @loanTypeCate)
+                      AND a.ApplicationDate >= '2024-05-01'
+                      AND (@AccountNo IS NULL OR a.AccountNo = @AccountNo)
+                      AND (@ApplicationCode IS NULL OR a.ApplicationCode = @ApplicationCode OR appex.RefCode = @ApplicationCode)
+                      AND (@ProductSerialNo IS NULL OR a.ProductSerialNo = @ProductSerialNo)
+                      AND (@CustomerID IS NULL OR a.CustomerID = @CustomerID)
+                      AND (@CustomerName IS NULL OR cus.FirstName + ' ' + cus.LastName LIKE '%' + @CustomerName + '%')
+                    ORDER BY a.ApplicationDate DESC;
 
+                    -- Drop temporary table
+                    DROP TABLE #CONTRACTS_TEMP;";
 
                     var parameters = new
                     {
@@ -351,7 +334,7 @@ namespace App.Controllers
 
                     var applications = connection.Query<ApplicationResponeModel>(commandDefinition);
 
-                    // °”Àπ¥§Ë“∑’ËµÈÕß°“√µ√«® Õ∫
+                    // ‡∏Å‡∏≥‡∏´‡∏ô‡∏î‡∏Ñ‡πà‡∏≤‡∏ó‡∏µ‡πà‡∏ï‡πâ‡∏≠‡∏á‡∏Å‡∏≤‡∏£‡∏ï‡∏£‡∏ß‡∏à‡∏™‡∏≠‡∏ö
 
                     string[] validStatuses;
 
@@ -468,12 +451,7 @@ namespace App.Controllers
 
                 if (string.IsNullOrEmpty(ResultDescription))
                 {
-                    //∂È“‡ªÁπ SGB
-                    if (!string.IsNullOrEmpty(_GetApplicationRespone.appIns))
-                    {
-                        SGBCancelRespone sGBCancelRespone = new SGBCancelRespone();
-                        sGBCancelRespone = await SGBCancel(_GetApplication);
-                    }
+                   
 
 
                     string currentDateTime = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
@@ -511,7 +489,7 @@ namespace App.Controllers
                 //}
                 //else
                 //{
-                //    ResultDescription = "‰¡Ë “¡“√∂¬°‡≈‘°√“¬°“√‰¥È ‡π◊ËÕß®“°‡≈¬°”Àπ¥‡«≈“°“√¬°‡≈‘°·≈È«";
+                //    ResultDescription = "‡πÑ‡∏°‡πà‡∏™‡∏≤‡∏°‡∏≤‡∏£‡∏ñ‡∏¢‡∏Å‡πÄ‡∏•‡∏¥‡∏Å‡∏£‡∏≤‡∏¢‡∏Å‡∏≤‡∏£‡πÑ‡∏î‡πâ ‡πÄ‡∏ô‡∏∑‡πà‡∏≠‡∏á‡∏à‡∏≤‡∏Å‡πÄ‡∏•‡∏¢‡∏Å‡∏≥‡∏´‡∏ô‡∏î‡πÄ‡∏ß‡∏•‡∏≤‡∏Å‡∏≤‡∏£‡∏¢‡∏Å‡πÄ‡∏•‡∏¥‡∏Å‡πÅ‡∏•‡πâ‡∏ß";
                 //}
                 return ResultDescription;
             }
@@ -590,6 +568,13 @@ namespace App.Controllers
 
                 if (ResultDescription == "")
                 {
+                    //‡∏ñ‡πâ‡∏≤‡πÄ‡∏õ‡πá‡∏ô SGB
+                    if (!string.IsNullOrEmpty(_GetApplicationRespone.appIns))
+                    {
+                        SGBCancelRespone sGBCancelRespone = new SGBCancelRespone();
+                        sGBCancelRespone = await SGBCancel(_GetApplication);
+                    }
+
                     string currentDateTime = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
                     var requestBody = new
                     {
@@ -625,7 +610,7 @@ namespace App.Controllers
                 //}
                 //else
                 //{
-                //    ResultDescription = "‰¡Ë “¡“√∂¬°‡≈‘°√“¬°“√‰¥È ‡π◊ËÕß®“°‡≈¬°”Àπ¥‡«≈“°“√¬°‡≈‘°·≈È«";
+                //    ResultDescription = "‡πÑ‡∏°‡πà‡∏™‡∏≤‡∏°‡∏≤‡∏£‡∏ñ‡∏¢‡∏Å‡πÄ‡∏•‡∏¥‡∏Å‡∏£‡∏≤‡∏¢‡∏Å‡∏≤‡∏£‡πÑ‡∏î‡πâ ‡πÄ‡∏ô‡∏∑‡πà‡∏≠‡∏á‡∏à‡∏≤‡∏Å‡πÄ‡∏•‡∏¢‡∏Å‡∏≥‡∏´‡∏ô‡∏î‡πÄ‡∏ß‡∏•‡∏≤‡∏Å‡∏≤‡∏£‡∏¢‡∏Å‡πÄ‡∏•‡∏¥‡∏Å‡πÅ‡∏•‡πâ‡∏ß";
                 //}
                 return ResultDescription;
             }
@@ -869,7 +854,7 @@ namespace App.Controllers
         [HttpPost]
         public async Task<MessageReturn> GetStatusClosedSGFinance([FromBody] C100StatusRq _C100StatusRq)
         {
-            Log.Debug("By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_C100StatusRq));
+            Log.Debug("GetStatusClosedSGFinance By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_C100StatusRq));
             string ResultDescription = "";
             MessageReturn _MessageReturn = new MessageReturn();
             try
@@ -948,7 +933,7 @@ namespace App.Controllers
         [HttpPost]
         public async Task<MessageReturn> GenEsignature([FromBody] C100StatusRq _C100StatusRq)
         {
-            Log.Debug("By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_C100StatusRq));
+            Log.Debug("GenEsignature By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_C100StatusRq));
             MessageReturn _MessageReturn = new MessageReturn();
             try
             {
@@ -995,7 +980,7 @@ namespace App.Controllers
         public async Task<MessageReturn> GetAddTNewSalesNewSGFinance([FromBody] C100StatusRq _C100StatusRq)
         {
 
-            Log.Debug("By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_C100StatusRq));
+            Log.Debug("GetAddTNewSalesNewSGFinance By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_C100StatusRq));
             MessageReturn _MessageReturn = new MessageReturn();
             GetOuCodeRespone _GetOuCodeRespone = new GetOuCodeRespone();
             try
@@ -1076,7 +1061,7 @@ namespace App.Controllers
 
         public async Task<RegisIMEIRespone> RegisIMEI([FromBody] GetApplication _GetApplication)
         {
-            Log.Debug("By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_GetApplication));
+            Log.Debug("RegisIMEI By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_GetApplication));
             RegisIMEIRespone _RegisIMEIRespone = new RegisIMEIRespone();
             try
             {
@@ -1122,7 +1107,7 @@ namespace App.Controllers
 
         public async Task<SendEmailRespone> SendEmail([FromBody] GetApplication _GetApplication)
         {
-            Log.Debug("By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_GetApplication));
+            Log.Debug("SendEmail By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_GetApplication));
             SendEmailRespone sendEmailRespone = new SendEmailRespone();
             try
             {
@@ -1180,7 +1165,7 @@ namespace App.Controllers
 
         public async Task<SGBCancelRespone> SGBCancel([FromBody] GetApplication _GetApplication)
         {
-            Log.Debug("By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_GetApplication));
+            Log.Debug("SGBCancel By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_GetApplication));
             SGBCancelRespone sGBCancelRespone = new SGBCancelRespone();
             try
             {
