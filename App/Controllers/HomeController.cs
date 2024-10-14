@@ -15,6 +15,7 @@ using Microsoft.Identity.Client;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using static System.Net.Mime.MediaTypeNames;
 using Microsoft.IdentityModel.Tokens;
+using System.Net.Http.Headers;
 
 namespace App.Controllers
 {
@@ -22,7 +23,7 @@ namespace App.Controllers
     {
         private readonly ILogger<HomeController> _logger;
         string strConnString, DATABASEK2, WSCANCEL, UrlEztax, UsernameEztax, PasswordEztax, ClientIdEztax, ApiKey, SGAPIESIG, SGDIRECT, SGCESIGNATURE, SGCROSSBANK, C100 , C100Apikey, SGBCancelApikey;
-
+        private static readonly HttpClient client = new HttpClient();
         public HomeController(ILogger<HomeController> logger)
         {
 
@@ -1205,6 +1206,44 @@ namespace App.Controllers
                 Log.Debug("RETURN : " + JsonConvert.SerializeObject(sGBCancelRespone));
                 return sGBCancelRespone;
             }
+        }
+
+        public async Task<RegisIMEIRespone> LinkPayment([FromBody] GetApplication _GetApplication)
+        {
+            RegisIMEIRespone _RegisIMEIRespone = new RegisIMEIRespone();
+            Log.Debug("SGBCancel By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_GetApplication));
+            var url = "http://sg-posservice.singerthai.co.th:8344/WebServiceGenLinkWithSms.asmx?op=GenLinkWithSms";
+
+            var soapRequest = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+        <soap12:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:soap12=""http://www.w3.org/2003/05/soap-envelope"">
+          <soap12:Body>
+            <GenLinkWithSms xmlns=""http://tempuri.org/"">
+              <AppCode>{_GetApplication.ApplicationCode}</AppCode>
+            </GenLinkWithSms>
+          </soap12:Body>
+        </soap12:Envelope>";
+
+            var content = new StringContent(soapRequest, Encoding.UTF8, "application/soap+xml");
+
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/soap+xml"));
+
+            try
+            {
+                var response = await client.PostAsync(url, content);
+                response.EnsureSuccessStatusCode();
+
+                var responseBody = await response.Content.ReadAsStringAsync();
+               
+                _RegisIMEIRespone.statusCode = "PASS";
+                Log.Debug(responseBody);
+            }
+            catch (Exception ex)
+            {
+                _RegisIMEIRespone.statusCode = ex.Message;
+                Log.Error($"Error: {ex.Message}");
+            }
+
+            return _RegisIMEIRespone;
         }
 
         [HttpGet("CheckSession")]
