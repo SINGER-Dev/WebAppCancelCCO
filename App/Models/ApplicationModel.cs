@@ -41,6 +41,14 @@ namespace App.Models
         public string? statusCode { get; set; }
     }
 
+    public class RegisIMEIRp
+    {
+        public string system { get; set; }
+        public string status { get; set; }
+        public string imei { get; set; }
+        public string message { get; set; }
+    }
+
     public class SendEmailRespone
     {
         public string? statusCode { get; set; }

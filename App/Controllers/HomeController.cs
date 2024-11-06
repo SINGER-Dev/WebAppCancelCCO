@@ -22,7 +22,7 @@ namespace App.Controllers
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
-        string strConnString, DATABASEK2, WSCANCEL, UrlEztax, UsernameEztax, PasswordEztax, ClientIdEztax, ApiKey, SGAPIESIG, SGDIRECT, SGCESIGNATURE, SGCROSSBANK, C100 , C100Apikey, SGBCancelApikey;
+        string strConnString, strConnString2, WSRegis, WSRegisApi,DATABASEK2, WSCANCEL, UrlEztax, UsernameEztax, PasswordEztax, ClientIdEztax, ApiKey, SGAPIESIG, SGDIRECT, SGCESIGNATURE, SGCROSSBANK, C100 , C100Apikey, SGBCancelApikey;
         private static readonly HttpClient client = new HttpClient();
         public HomeController(ILogger<HomeController> logger)
         {
@@ -36,6 +36,7 @@ namespace App.Controllers
                         .Build();
             _logger = logger;
             strConnString = builder.GetConnectionString("strConnString");
+            strConnString2 = builder.GetConnectionString("strConnString2"); 
             DATABASEK2 = builder.GetConnectionString("DATABASEK2");
             WSCANCEL = builder.GetConnectionString("WSCANCEL");
             UrlEztax = builder.GetConnectionString("UrlEztax");
@@ -52,6 +53,9 @@ namespace App.Controllers
             C100 = builder.GetConnectionString("C100");
             C100Apikey = builder.GetConnectionString("C100Apikey");
             SGBCancelApikey = builder.GetConnectionString("SGBCancelApikey");
+
+            WSRegis = builder.GetConnectionString("WSRegis");
+            WSRegisApi = builder.GetConnectionString("WSRegisApi");
         }
 
 
@@ -939,6 +943,34 @@ namespace App.Controllers
             try
             {
 
+
+                using (var connection = new SqlConnection(strConnString2))
+                {
+                    connection.Open();
+
+                    // เช็คว่าในตาราง contracts ไม่มีข้อมูลที่ตรงกับ DocumentNo
+                    string checkContractsQuery = $"SELECT COUNT(1) FROM {SGCESIGNATURE}.[contracts] WHERE DocumentNo = @DocumentNo";
+                    int contractsCount = connection.ExecuteScalar<int>(checkContractsQuery, new { DocumentNo = _C100StatusRq.ApplicationCode });
+
+                    // ถ้าไม่มีข้อมูลใน contracts และมีข้อมูลใน MapingOrderAccount
+                    if (contractsCount == 0)
+                    {
+                        string checkMapingOrderAccountQuery = $"SELECT COUNT(1) FROM {SGCESIGNATURE}.[MapingOrderAccount] WHERE ApplicationCode = @ApplicationCode";
+                        int mapingCount = connection.ExecuteScalar<int>(checkMapingOrderAccountQuery, new { ApplicationCode = _C100StatusRq.ApplicationCode });
+
+                        // ถ้ามีข้อมูลใน MapingOrderAccount
+                        if (mapingCount > 0)
+                        {
+                            // เรียกใช้ stored procedure ESG_SP_GEN_CONTRACT_SGFINANCE
+                            string storedProcedure = $"EXEC {SGCESIGNATURE}.[ESG_SP_GEN_CONTRACT_SGFINANCE] @Parameter";
+                            connection.Execute(storedProcedure, new { Parameter = _C100StatusRq.ApplicationCode });
+                        }
+
+                    }
+                }
+
+
+
                 var requestBody = new
                 {
                     APPLICATION_CODE = _C100StatusRq.ApplicationCode
@@ -961,9 +993,11 @@ namespace App.Controllers
                     {
                         var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
 
-                        _MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
+
                     }
                 }
+                _MessageReturn.StatusCode = "200";
+                _MessageReturn.Message = "Success.";
 
                 Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
                 return _MessageReturn;
@@ -1066,33 +1100,72 @@ namespace App.Controllers
             RegisIMEIRespone _RegisIMEIRespone = new RegisIMEIRespone();
             try
             {
+                string? message = "";
                 GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
 
                 var requestBody = new
                 {
-                    SerrialNo = _GetApplicationRespone.ProductSerialNo,
-                    APPLICATION_CODE = _GetApplicationRespone.ApplicationCode,
+                    ApplicationID = _GetApplicationRespone.ApplicationCode,
+                    IMEI = _GetApplicationRespone.ProductSerialNo,
                     Brand = _GetApplicationRespone.ProductBrandName
                 };
 
                 using (HttpClient client = new HttpClient())
                 {
                     string jsonBody = JsonConvert.SerializeObject(requestBody);
-
-                    client.DefaultRequestHeaders.Add("apikey", ApiKey);
+                    
+                    
+                    client.DefaultRequestHeaders.Add("apikey", WSRegisApi);
                     client.DefaultRequestHeaders.Add("user", "DEV");
 
                     var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/RegisIMEI", content);
+                    HttpResponseMessage responseDevice = await client.PostAsync(WSRegis + "/Register", content);
                     int DeviceStatusCode = (int)responseDevice.StatusCode;
                     Log.Debug("API RETURN : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
                     if (responseDevice.IsSuccessStatusCode)
                     {
                         var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
 
-                        _RegisIMEIRespone = JsonConvert.DeserializeObject<RegisIMEIRespone>(jsonResponseDevice);
+                        RegisIMEIRp _RegisIMEIRp = JsonConvert.DeserializeObject<RegisIMEIRp>(jsonResponseDevice);
+
+                        if(_RegisIMEIRp.message == "REGISTER DEVICE SUCCESS")
+                        {
+                            message = "REGISTER DEVICE SUCCESS";
+                        }
+
+                        _RegisIMEIRespone.statusCode = "PASS";
                     }
                 }
+
+                if(message != "")
+                {
+                    string currentDateTime = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+                    var requestBody2 = new
+                    {
+                        applicationCode = _GetApplicationRespone.ApplicationCode,
+                        applicationStatus = "CLOSED",
+                        approvalStatus = "CLOSED",
+                        approvalDatetime = currentDateTime,
+                        remark = "",
+                        losApplicationCode = _GetApplicationRespone.ApplicationCode,
+                        contractNo = _GetApplicationRespone.AccountNo
+                    };
+
+                    Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody2));
+
+                    using (HttpClient client = new HttpClient())
+                    {
+                        string jsonBody = JsonConvert.SerializeObject(requestBody2);
+
+                        client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
+
+                        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                        HttpResponseMessage responseDevice = await client.PostAsync(C100 + "/los/v2/SgFinance/C100_Status", content);
+                        int DeviceStatusCode = (int)responseDevice.StatusCode;
+
+                    }
+                }
+                
 
                 Log.Debug("RETURN : " + JsonConvert.SerializeObject(_RegisIMEIRespone));
                 return _RegisIMEIRespone;
