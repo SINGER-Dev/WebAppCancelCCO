@@ -41,14 +41,6 @@ namespace App.Models
         public string? statusCode { get; set; }
     }
 
-    public class RegisIMEIRp
-    {
-        public string system { get; set; }
-        public string status { get; set; }
-        public string imei { get; set; }
-        public string message { get; set; }
-    }
-
     public class SendEmailRespone
     {
         public string? statusCode { get; set; }
@@ -128,6 +120,12 @@ namespace App.Models
     {
         public string? ApplicationCode { get; set; }
     }
+    public class SendEmailRq
+    {
+        public string? ApplicationCode { get; set; }
+        public string? Remark { get; set; }
+    }
+
     public class GetApplicationRespone
     {
         public string? statusCode { get; set; }
@@ -148,6 +146,14 @@ namespace App.Models
         public string? SaleTelephoneNo { get; set; }
         public string? RefCode { get; set; }
         public string? appIns { get; set; }
+
+        public string? Cash { get; set; }
+        public string? DownPayment { get; set; }
+        public string? ApplicationDate { get; set; }
+        public string? InterestPercent { get; set; }
+        public string? InstallmentPeriod { get; set; }
+        public string? Discount { get; set; }
+
     }
 
 
@@ -155,9 +161,9 @@ namespace App.Models
     {
         public string fromName { get; set; }
         public string fromEmail { get; set; }
-        public List<SenEmailTo> to { get; set; }
-        public List<object> cc { get; set; }
-        public List<object> bcc { get; set; }
+        public List<SenEmailTo> to { get; set; } = new List<SenEmailTo>();
+        public List<object> cc { get; set; } = new List<object>();
+        public List<object> bcc { get; set; } = new List<object>();
         public string subject { get; set; }
         public string content { get; set; }
     }

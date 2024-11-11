@@ -9,71 +9,71 @@ build_property.EnforceExtendedAnalyzerRules =
 build_property._SupportedPlatformList = Linux,macOS,Windows
 build_property.RootNamespace = App
 build_property.RootNamespace = App
-build_property.ProjectDir = D:\Project\WebAppCancelCCO\WebAppCancelCCO\App\
+build_property.ProjectDir = D:\project\WebAppCancelCCO\App\
 build_property.EnableComHosting = 
 build_property.EnableGeneratedComInterfaceComImportInterop = 
 build_property.RazorLangVersion = 8.0
 build_property.SupportLocalizedComponentNames = 
 build_property.GenerateRazorMetadataSourceChecksumAttributes = 
-build_property.MSBuildProjectDirectory = D:\Project\WebAppCancelCCO\WebAppCancelCCO\App
+build_property.MSBuildProjectDirectory = D:\project\WebAppCancelCCO\App
 build_property._RazorSourceGeneratorDebug = 
 
-[D:/Project/WebAppCancelCCO/WebAppCancelCCO/App/Views/Home/FormCancel.cshtml]
+[D:/project/WebAppCancelCCO/App/Views/Home/FormCancel.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxGb3JtQ2FuY2VsLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Project/WebAppCancelCCO/WebAppCancelCCO/App/Views/Home/GetApplicationHistory.cshtml]
+[D:/project/WebAppCancelCCO/App/Views/Home/GetApplicationHistory.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxHZXRBcHBsaWNhdGlvbkhpc3RvcnkuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Project/WebAppCancelCCO/WebAppCancelCCO/App/Views/Home/Index.cshtml]
+[D:/project/WebAppCancelCCO/App/Views/Home/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxJbmRleC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Project/WebAppCancelCCO/WebAppCancelCCO/App/Views/Home/Privacy.cshtml]
+[D:/project/WebAppCancelCCO/App/Views/Home/Privacy.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxQcml2YWN5LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Project/WebAppCancelCCO/WebAppCancelCCO/App/Views/Home/StatusError.cshtml]
+[D:/project/WebAppCancelCCO/App/Views/Home/StatusError.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxTdGF0dXNFcnJvci5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Project/WebAppCancelCCO/WebAppCancelCCO/App/Views/Home/StatusSuccess.cshtml]
+[D:/project/WebAppCancelCCO/App/Views/Home/StatusSuccess.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxTdGF0dXNTdWNjZXNzLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Project/WebAppCancelCCO/WebAppCancelCCO/App/Views/Home/UpdateDataCancel.cshtml]
+[D:/project/WebAppCancelCCO/App/Views/Home/UpdateDataCancel.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxVcGRhdGVEYXRhQ2FuY2VsLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Project/WebAppCancelCCO/WebAppCancelCCO/App/Views/Home/_SearchGetApplicationHistory.cshtml]
+[D:/project/WebAppCancelCCO/App/Views/Home/_SearchGetApplicationHistory.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxfU2VhcmNoR2V0QXBwbGljYXRpb25IaXN0b3J5LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Project/WebAppCancelCCO/WebAppCancelCCO/App/Views/Home/_SearchResults.cshtml]
+[D:/project/WebAppCancelCCO/App/Views/Home/_SearchResults.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxfU2VhcmNoUmVzdWx0cy5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Project/WebAppCancelCCO/WebAppCancelCCO/App/Views/Login/Index.cshtml]
+[D:/project/WebAppCancelCCO/App/Views/Login/Index.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcTG9naW5cSW5kZXguY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Project/WebAppCancelCCO/WebAppCancelCCO/App/Views/Shared/Error.cshtml]
+[D:/project/WebAppCancelCCO/App/Views/Shared/Error.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXEVycm9yLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Project/WebAppCancelCCO/WebAppCancelCCO/App/Views/Shared/_ValidationScriptsPartial.cshtml]
+[D:/project/WebAppCancelCCO/App/Views/Shared/_ValidationScriptsPartial.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9WYWxpZGF0aW9uU2NyaXB0c1BhcnRpYWwuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Project/WebAppCancelCCO/WebAppCancelCCO/App/Views/_ViewImports.cshtml]
+[D:/project/WebAppCancelCCO/App/Views/_ViewImports.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcX1ZpZXdJbXBvcnRzLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Project/WebAppCancelCCO/WebAppCancelCCO/App/Views/_ViewStart.cshtml]
+[D:/project/WebAppCancelCCO/App/Views/_ViewStart.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcX1ZpZXdTdGFydC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Project/WebAppCancelCCO/WebAppCancelCCO/App/Views/Shared/_Layout.cshtml]
+[D:/project/WebAppCancelCCO/App/Views/Shared/_Layout.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcU2hhcmVkXF9MYXlvdXQuY3NodG1s
 build_metadata.AdditionalFiles.CssScope = b-78367sr58w

@@ -22,7 +22,7 @@ namespace App.Controllers
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
-        string strConnString, strConnString2, WSRegis, WSRegisApi,DATABASEK2, WSCANCEL, UrlEztax, UsernameEztax, PasswordEztax, ClientIdEztax, ApiKey, SGAPIESIG, SGDIRECT, SGCESIGNATURE, SGCROSSBANK, C100 , C100Apikey, SGBCancelApikey;
+        string strConnString, DATABASEK2, WSCANCEL, UrlEztax, UsernameEztax, PasswordEztax, ClientIdEztax, ApiKey, SGAPIESIG, SGDIRECT, SGCESIGNATURE, SGCROSSBANK, C100 , C100Apikey, SGBCancelApikey, SGBCancelApi;
         private static readonly HttpClient client = new HttpClient();
         public HomeController(ILogger<HomeController> logger)
         {
@@ -36,7 +36,6 @@ namespace App.Controllers
                         .Build();
             _logger = logger;
             strConnString = builder.GetConnectionString("strConnString");
-            strConnString2 = builder.GetConnectionString("strConnString2"); 
             DATABASEK2 = builder.GetConnectionString("DATABASEK2");
             WSCANCEL = builder.GetConnectionString("WSCANCEL");
             UrlEztax = builder.GetConnectionString("UrlEztax");
@@ -52,10 +51,10 @@ namespace App.Controllers
             SGCROSSBANK = builder.GetConnectionString("SGCROSSBANK");
             C100 = builder.GetConnectionString("C100");
             C100Apikey = builder.GetConnectionString("C100Apikey");
-            SGBCancelApikey = builder.GetConnectionString("SGBCancelApikey");
+            
 
-            WSRegis = builder.GetConnectionString("WSRegis");
-            WSRegisApi = builder.GetConnectionString("WSRegisApi");
+            SGBCancelApi = builder.GetConnectionString("SGBCancelApi");
+            SGBCancelApikey = builder.GetConnectionString("SGBCancelApikey");
         }
 
 
@@ -789,7 +788,13 @@ namespace App.Controllers
                                     app.ProductBrandName,
                                     app.SaleDepCode,
                                     app.SaleDepName,
-                                    appex.RefCode
+                                    appex.RefCode,
+                                    app.Cash,
+                                    app.DownPayment,
+                                    app.ApplicationDate,
+                                    appex.InterestPercent,
+                                    app.InstallmentPeriod,
+                                    app.Discount
                                 FROM
                                     {DATABASEK2}.[Application] app WITH (NOLOCK)
                                 LEFT JOIN
@@ -834,7 +839,16 @@ namespace App.Controllers
                     _GetApplicationRespone.SaleName = dt.Rows[0]["SaleName"].ToString();
                     _GetApplicationRespone.SaleTelephoneNo = dt.Rows[0]["SaleTelephoneNo"].ToString();
                     _GetApplicationRespone.RefCode = dt.Rows[0]["RefCode"].ToString();
-                    
+
+
+                    _GetApplicationRespone.Cash = dt.Rows[0]["_GetApplicationRespone"].ToString();
+                    _GetApplicationRespone.DownPayment = dt.Rows[0]["_GetApplicationRespone"].ToString();
+                    _GetApplicationRespone.ApplicationDate = dt.Rows[0]["_GetApplicationRespone"].ToString();
+                    _GetApplicationRespone.InterestPercent = dt.Rows[0]["_GetApplicationRespone"].ToString();
+                    _GetApplicationRespone.InstallmentPeriod = dt.Rows[0]["_GetApplicationRespone"].ToString();
+                    _GetApplicationRespone.Discount = dt.Rows[0]["_GetApplicationRespone"].ToString();
+
+
                 }
                 else
                 {
@@ -943,34 +957,6 @@ namespace App.Controllers
             try
             {
 
-
-                using (var connection = new SqlConnection(strConnString2))
-                {
-                    connection.Open();
-
-                    // เช็คว่าในตาราง contracts ไม่มีข้อมูลที่ตรงกับ DocumentNo
-                    string checkContractsQuery = $"SELECT COUNT(1) FROM {SGCESIGNATURE}.[contracts] WHERE DocumentNo = @DocumentNo";
-                    int contractsCount = connection.ExecuteScalar<int>(checkContractsQuery, new { DocumentNo = _C100StatusRq.ApplicationCode });
-
-                    // ถ้าไม่มีข้อมูลใน contracts และมีข้อมูลใน MapingOrderAccount
-                    if (contractsCount == 0)
-                    {
-                        string checkMapingOrderAccountQuery = $"SELECT COUNT(1) FROM {SGCESIGNATURE}.[MapingOrderAccount] WHERE ApplicationCode = @ApplicationCode";
-                        int mapingCount = connection.ExecuteScalar<int>(checkMapingOrderAccountQuery, new { ApplicationCode = _C100StatusRq.ApplicationCode });
-
-                        // ถ้ามีข้อมูลใน MapingOrderAccount
-                        if (mapingCount > 0)
-                        {
-                            // เรียกใช้ stored procedure ESG_SP_GEN_CONTRACT_SGFINANCE
-                            string storedProcedure = $"EXEC {SGCESIGNATURE}.[ESG_SP_GEN_CONTRACT_SGFINANCE] @Parameter";
-                            connection.Execute(storedProcedure, new { Parameter = _C100StatusRq.ApplicationCode });
-                        }
-
-                    }
-                }
-
-
-
                 var requestBody = new
                 {
                     APPLICATION_CODE = _C100StatusRq.ApplicationCode
@@ -993,11 +979,9 @@ namespace App.Controllers
                     {
                         var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
 
-
+                        _MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
                     }
                 }
-                _MessageReturn.StatusCode = "200";
-                _MessageReturn.Message = "Success.";
 
                 Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
                 return _MessageReturn;
@@ -1100,72 +1084,51 @@ namespace App.Controllers
             RegisIMEIRespone _RegisIMEIRespone = new RegisIMEIRespone();
             try
             {
-                string? message = "";
                 GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
 
                 var requestBody = new
                 {
-                    ApplicationID = _GetApplicationRespone.ApplicationCode,
-                    IMEI = _GetApplicationRespone.ProductSerialNo,
+                    SerrialNo = _GetApplicationRespone.ProductSerialNo,
+                    APPLICATION_CODE = _GetApplicationRespone.ApplicationCode,
                     Brand = _GetApplicationRespone.ProductBrandName
                 };
 
                 using (HttpClient client = new HttpClient())
                 {
                     string jsonBody = JsonConvert.SerializeObject(requestBody);
-                    
-                    
-                    client.DefaultRequestHeaders.Add("apikey", WSRegisApi);
+
+                    client.DefaultRequestHeaders.Add("apikey", ApiKey);
                     client.DefaultRequestHeaders.Add("user", "DEV");
 
                     var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                    HttpResponseMessage responseDevice = await client.PostAsync(WSRegis + "/Register", content);
+                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/RegisIMEI", content);
                     int DeviceStatusCode = (int)responseDevice.StatusCode;
                     Log.Debug("API RETURN : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
                     if (responseDevice.IsSuccessStatusCode)
                     {
+
+                      /*  if (_GetApplicationRespone.ProductBrandName.Trim().ToUpper() == "OPPO")
+                        {
+                            float new_loan = float.Parse(_GetApplicationRespone.Cash) - float.Parse(_GetApplicationRespone.DownPayment);
+                            LendingInfoRq lendingInfoRq = new LendingInfoRq();
+                            lendingInfoRq.ApplicationCode = _GetApplication.ApplicationCode;
+                            lendingInfoRq.application_date = _GetApplicationRespone.ApplicationDate;
+                            lendingInfoRq.product_serial = _GetApplicationRespone.ProductSerialNo;
+                            lendingInfoRq.flat_rate = _GetApplicationRespone.InterestPercent;
+                            lendingInfoRq.cash_price = _GetApplicationRespone.Cash;
+                            lendingInfoRq.down_payment = ""; //%ดาวน์
+                            lendingInfoRq.down_amount = _GetApplicationRespone.DownPayment.ToString();
+                            lendingInfoRq.new_loan = new_loan.ToString();
+                            lendingInfoRq.contract_term = _GetApplicationRespone.InstallmentPeriod.ToString();
+                            lendingInfoRq.discount = _GetApplicationRespone.Discount;
+                            await LendingInfo(lendingInfoRq);
+                        }*/
+
                         var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
 
-                        RegisIMEIRp _RegisIMEIRp = JsonConvert.DeserializeObject<RegisIMEIRp>(jsonResponseDevice);
-
-                        if(_RegisIMEIRp.message == "REGISTER DEVICE SUCCESS")
-                        {
-                            message = "REGISTER DEVICE SUCCESS";
-                        }
-
-                        _RegisIMEIRespone.statusCode = "PASS";
+                        _RegisIMEIRespone = JsonConvert.DeserializeObject<RegisIMEIRespone>(jsonResponseDevice);
                     }
                 }
-
-                if(message != "")
-                {
-                    string currentDateTime = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
-                    var requestBody2 = new
-                    {
-                        applicationCode = _GetApplicationRespone.ApplicationCode,
-                        applicationStatus = "CLOSED",
-                        approvalStatus = "CLOSED",
-                        approvalDatetime = currentDateTime,
-                        remark = "",
-                        losApplicationCode = _GetApplicationRespone.ApplicationCode,
-                        contractNo = _GetApplicationRespone.AccountNo
-                    };
-
-                    Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody2));
-
-                    using (HttpClient client = new HttpClient())
-                    {
-                        string jsonBody = JsonConvert.SerializeObject(requestBody2);
-
-                        client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
-
-                        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                        HttpResponseMessage responseDevice = await client.PostAsync(C100 + "/los/v2/SgFinance/C100_Status", content);
-                        int DeviceStatusCode = (int)responseDevice.StatusCode;
-
-                    }
-                }
-                
 
                 Log.Debug("RETURN : " + JsonConvert.SerializeObject(_RegisIMEIRespone));
                 return _RegisIMEIRespone;
@@ -1178,34 +1141,75 @@ namespace App.Controllers
             }
         }
 
-
-        public async Task<SendEmailRespone> SendEmail([FromBody] GetApplication _GetApplication)
+        [HttpPost]
+        [Route("LendingInfo")]
+        public async Task LendingInfo([FromBody] LendingInfoRq _LendingInfoRq)
         {
-            Log.Debug("SendEmail By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_GetApplication));
+            try
+            {
+
+                using (HttpClient client = new HttpClient())
+                {
+                    string jsonBody = JsonConvert.SerializeObject(_LendingInfoRq);
+
+                    client.DefaultRequestHeaders.Add("apikey", ApiKey);
+                    client.DefaultRequestHeaders.Add("user", "DEV");
+
+                    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/LendingInfo", content);
+                    int DeviceStatusCode = (int)responseDevice.StatusCode;
+                    Log.Debug("API RETURN : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("RETURN : " + JsonConvert.SerializeObject(ex.Message));
+            }
+           
+        }
+
+        [HttpPost]
+        [Route("SendEmail")]
+        public async Task<SendEmailRespone> SendEmail([FromBody] SendEmailRq sendEmailRq)
+        {
+            Log.Debug("SendEmail By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(sendEmailRq));
             SendEmailRespone sendEmailRespone = new SendEmailRespone();
             try
             {
-                GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
+
+                GetApplication getApplication = new GetApplication();
+                getApplication.ApplicationCode = sendEmailRq.ApplicationCode;
+                GetApplicationRespone _GetApplicationRespone = await GetApplication(getApplication);
 
                 SenEmailBody senEmailBody = new SenEmailBody();
-                SenEmailTo senEmailTo = new SenEmailTo();
-                senEmailBody.fromName = "";
-                senEmailBody.fromEmail = "";
+                
 
-                senEmailTo.Name = "";
-                senEmailTo.Email = "";
+                senEmailBody.fromName = "AutomailSystem@sgcapital.co.th";
+                senEmailBody.fromEmail = "AutomailSystem@sgcapital.co.th";
+
+                SenEmailTo senEmailTo = new SenEmailTo();
+                senEmailTo.Name = "RattanapongT";
+                senEmailTo.Email = "RattanapongT@singerthai.co.th";
                 senEmailBody.to.Add(senEmailTo);
 
-                senEmailBody.cc.Add("a");
-                senEmailBody.cc.Add("a");
-                senEmailBody.cc.Add("a");
+                SenEmailTo senEmailToCC1 = new SenEmailTo();
+                senEmailToCC1.Name = "SiripornK";
+                senEmailToCC1.Email = "SiripornK@singerthai.co.th";
+                senEmailBody.cc.Add(senEmailToCC1);
 
-                senEmailBody.bcc.Add("a");
-                senEmailBody.bcc.Add("a");
-                senEmailBody.bcc.Add("a");
+                senEmailBody.subject = $@"[ระบบตรวจสอบใบคำขอ SG Finance+] มีการยกเลิกใบคำขอเลขที่ {_GetApplicationRespone.ApplicationCode}  บัญชีเลขที่ {_GetApplicationRespone.AccountNo}";
+                senEmailBody.content = $@"
+เรียนผู้เกี่ยวข้องทุกท่าน
 
-                senEmailBody.subject = "";
-                senEmailBody.content = "";
+มีการยกเลิกใบคำขอเลขที่ {_GetApplicationRespone.ApplicationCode} 
+บัญชีเลขที่ {_GetApplicationRespone.AccountNo} โดย เทสระบบ 
+เหตุผล {sendEmailRq.Remark} 
+กรุณาดำเนินการในส่วนที่เกี่ยวข้องต่อไปด้วย
+
+=========================================
+ขอแสดงความนับถือ
+=========================================
+                    ";
 
 
                 var requestBody = senEmailBody;
@@ -1236,7 +1240,7 @@ namespace App.Controllers
                 return sendEmailRespone;
             }
         }
-
+        
         public async Task<SGBCancelRespone> SGBCancel([FromBody] GetApplication _GetApplication)
         {
             Log.Debug("SGBCancel By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_GetApplication));
@@ -1259,7 +1263,7 @@ namespace App.Controllers
                     client.DefaultRequestHeaders.Add("user", "DEV");
 
                     var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgbmobilecare/api/v1/policy/cancelpolicy", content);
+                    HttpResponseMessage responseDevice = await client.PostAsync(SGBCancelApi + "/sgbmobilecare/api/v1/policy/cancelpolicy", content);
                     int DeviceStatusCode = (int)responseDevice.StatusCode;
                     Log.Debug("API RETURN : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
                     if (responseDevice.IsSuccessStatusCode)

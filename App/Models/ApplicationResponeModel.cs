@@ -40,7 +40,19 @@ namespace App.Models
         
     }
 
-
+    public class LendingInfoRq
+    {
+        public string? ApplicationCode { get; set; }
+        public string? application_date { get; set; }
+        public string? product_serial { get; set; }
+        public string? flat_rate { get; set; }
+        public string? cash_price { get; set; }
+        public string? down_payment { get; set; }
+        public string? down_amount { get; set; }
+        public string? new_loan { get; set; }
+        public string? contract_term { get; set; }
+        public string? discount { get; set; }
+    }
     public class SearchGetApplicationHistoryRespone
     {
         public string ApplicationCode { get; set; }

@@ -111,7 +111,7 @@
 
                             @if ("LOCKPHONE" == result.loanTypeCate.ToString().Trim() && "SGC" == result.OU_Code.ToString().Trim())
                             {
-                                @if (result.ApplicationStatusID == "CLOSING"  && result.ProductSerialNo.Trim() != "")
+                                @if (result.ApplicationStatusID == "CLOSING" && result.signedStatus == "รอลงนาม" && result.ProductSerialNo.Trim() != "")
                                 {
                                     <i class="GenEsignature fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
                                 }
@@ -183,12 +183,7 @@
                             @if (result.newnum == "เรียบร้อย")
                             {
                                 <B>NewSale : </B>
-
-                                <span class="badge bg-success">@result.newnum</span>
-                                @if (result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว" && (result.newnum != "เรียบร้อย" && result.paynum != "เรียบร้อย") && result.OU_Code != "STL")
-                                {
-                                    <i class="GetAddTNewSalesNewSGFinance fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
-                                }
+                                    <span class="badge bg-success">@result.newnum</span>
                                 <br>
                             }
                             else
@@ -196,7 +191,7 @@
                                 <B>NewSale : </B>
 
                                 <span class="badge bg-warning" style="color:#000">@result.newnum</span>
-                                @if (result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว" && (result.newnum != "เรียบร้อย" && result.paynum != "เรียบร้อย") && result.OU_Code != "STL")
+                                @if (result.signedStatus == "เรียบร้อย" && result.statusReceived == "รับสินค้าแล้ว" && result.OU_Code != "STL")
                                 {
                                     <i class="GetAddTNewSalesNewSGFinance fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
                                 }

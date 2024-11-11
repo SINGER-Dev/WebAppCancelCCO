@@ -453,52 +453,6 @@
 
                 });
 
-                $(".LinkPayment").click(function () {
-
-                    var data = {
-                        ApplicationCode: $(this).data("applicationcode")
-                    };
-
-                    Swal.fire({
-                        title: "ยืนยันส่งลิงค์ชำระเงิน?",
-                        showCancelButton: true,
-                        confirmButtonText: "ยืนยัน",
-                        cancelButtonText: "ออก",
-                    }).then((result) => {
-                        /* Read more about isConfirmed, isDenied below */
-                        if (result.isConfirmed) {
-
-                            var formData = $(this).serialize(); // Serialize form data
-                            $.ajax({
-                                url: "./Home/LinkPayment", // Action URL
-                                type: "POST", // Method (POST in this case)
-                                contentType: 'application/json',
-                                data: JSON.stringify(data),
-                                success: function (result) {
-                                    if (result.statusCode == "PASS") {
-                                        Swal.fire({
-                                            title: "ส่งลิงค์ชำระเงินสำเร็จ!",
-                                            text: "ส่งลิงค์ชำระเงินสำเร็จ",
-                                            icon: "success"
-                                        });
-                                    }
-                                    else {
-                                        Swal.fire({
-                                            icon: "error",
-                                            title: "Oops...",
-                                            text: result.statusCode.message
-                                        });
-                                    }
-                                },
-                                error: function (xhr, status, error) {
-                                    console.error(error);
-                                }
-                            });
-                        }
-                    });
-
-                });
-
 
                 const dt = $('#example').DataTable({
                     scrollX: true,
