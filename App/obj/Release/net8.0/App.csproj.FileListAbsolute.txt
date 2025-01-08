@@ -160,3 +160,7 @@ D:\Project\WebAppCancelCCO\WebAppCancelCCO\App\obj\Release\net8.0\refint\App.dll
 D:\Project\WebAppCancelCCO\WebAppCancelCCO\App\obj\Release\net8.0\App.pdb
 D:\Project\WebAppCancelCCO\WebAppCancelCCO\App\obj\Release\net8.0\App.genruntimeconfig.cache
 D:\Project\WebAppCancelCCO\WebAppCancelCCO\App\obj\Release\net8.0\ref\App.dll
+D:\project\WebAppCancelCCO\App\bin\Release\net8.0\App.staticwebassets.endpoints.json
+D:\project\WebAppCancelCCO\App\obj\Release\net8.0\staticwebassets.build.endpoints.json
+D:\project\WebAppCancelCCO\App\obj\Release\net8.0\staticwebassets\msbuild.App.Microsoft.AspNetCore.StaticWebAssetEndpoints.props
+D:\project\WebAppCancelCCO\App\obj\Release\net8.0\staticwebassets.upToDateCheck.txt

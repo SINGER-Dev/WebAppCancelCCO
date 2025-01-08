@@ -2,7 +2,7 @@
   "Files": [
     {
       "Id": "D:\\project\\WebAppCancelCCO\\App\\obj\\Release\\net8.0\\scopedcss\\projectbundle\\App.bundle.scp.css",
-      "PackagePath": "staticwebassets\\App.bundle.scp.css"
+      "PackagePath": "staticwebassets\\App.kjl1uudz6h.bundle.scp.css"
     },
     {
       "Id": "D:\\project\\WebAppCancelCCO\\App\\wwwroot\\css\\dataTables.dataTables.css",
@@ -259,6 +259,10 @@
     {
       "Id": "D:\\project\\WebAppCancelCCO\\App\\wwwroot\\lib\\jquery\\dist\\jquery.min.map",
       "PackagePath": "staticwebassets\\lib\\jquery\\dist\\jquery.min.map"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\staticwebassets\\msbuild.App.Microsoft.AspNetCore.StaticWebAssetEndpoints.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssetEndpoints.props"
     },
     {
       "Id": "obj\\Release\\net8.0\\staticwebassets\\msbuild.App.Microsoft.AspNetCore.StaticWebAssets.props",

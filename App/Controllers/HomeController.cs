@@ -1101,7 +1101,7 @@ namespace App.Controllers
                     client.DefaultRequestHeaders.Add("user", "DEV");
 
                     var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/RegisIMEI", content);
+                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/LockPhoneHWFG", content);
                     int DeviceStatusCode = (int)responseDevice.StatusCode;
                     Log.Debug("API RETURN : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
                     if (responseDevice.IsSuccessStatusCode)
@@ -1166,6 +1166,33 @@ namespace App.Controllers
                 Log.Debug("RETURN : " + JsonConvert.SerializeObject(ex.Message));
             }
            
+        }
+
+        [HttpPost]
+        [Route("CancelledSGB")]
+        public async Task CancelledSGB([FromBody] LendingInfoRq _LendingInfoRq)
+        {
+            try
+            {
+
+                using (HttpClient client = new HttpClient())
+                {
+                    string jsonBody = JsonConvert.SerializeObject(_LendingInfoRq);
+
+                    client.DefaultRequestHeaders.Add("apikey", ApiKey);
+                    client.DefaultRequestHeaders.Add("user", "DEV");
+
+                    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/LendingInfo", content);
+                    int DeviceStatusCode = (int)responseDevice.StatusCode;
+                    Log.Debug("API RETURN : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("RETURN : " + JsonConvert.SerializeObject(ex.Message));
+            }
+
         }
 
         [HttpPost]
