@@ -1084,7 +1084,7 @@ namespace App.Controllers
             RegisIMEIRespone _RegisIMEIRespone = new RegisIMEIRespone();
             try
             {
-                GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
+                GetApplicationRespone _GetApplication = await GetApplication(_GetApplication);
 
                 var requestBody = new
                 {
