@@ -794,7 +794,8 @@ namespace App.Controllers
                                     app.ApplicationDate,
                                     appex.InterestPercent,
                                     app.InstallmentPeriod,
-                                    app.Discount
+                                    app.Discount,
+                                    ISNULL(appex.[ApplicationRef],'') AS ApplicationRef
                                 FROM
                                     {DATABASEK2}.[Application] app WITH (NOLOCK)
                                 LEFT JOIN
@@ -847,8 +848,9 @@ namespace App.Controllers
                     _GetApplicationRespone.InterestPercent = dt.Rows[0]["_GetApplicationRespone"].ToString();
                     _GetApplicationRespone.InstallmentPeriod = dt.Rows[0]["_GetApplicationRespone"].ToString();
                     _GetApplicationRespone.Discount = dt.Rows[0]["_GetApplicationRespone"].ToString();
+                    _GetApplicationRespone.ApplicationRef = dt.Rows[0]["ApplicationRef"].ToString();
 
-
+                    
                 }
                 else
                 {
@@ -1084,7 +1086,7 @@ namespace App.Controllers
             RegisIMEIRespone _RegisIMEIRespone = new RegisIMEIRespone();
             try
             {
-                GetApplicationRespone _GetApplication = await GetApplication(_GetApplication);
+                GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
 
                 var requestBody = new
                 {
@@ -1101,13 +1103,13 @@ namespace App.Controllers
                     client.DefaultRequestHeaders.Add("user", "DEV");
 
                     var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/LockPhoneHWFG", content);
+                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/RegisIMEI", content);
                     int DeviceStatusCode = (int)responseDevice.StatusCode;
                     Log.Debug("API RETURN : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
                     if (responseDevice.IsSuccessStatusCode)
                     {
 
-                      /*  if (_GetApplicationRespone.ProductBrandName.Trim().ToUpper() == "OPPO")
+                        if (_GetApplicationRespone.ProductBrandName.Trim().ToUpper() == "OPPO")
                         {
                             float new_loan = float.Parse(_GetApplicationRespone.Cash) - float.Parse(_GetApplicationRespone.DownPayment);
                             LendingInfoRq lendingInfoRq = new LendingInfoRq();
@@ -1122,11 +1124,19 @@ namespace App.Controllers
                             lendingInfoRq.contract_term = _GetApplicationRespone.InstallmentPeriod.ToString();
                             lendingInfoRq.discount = _GetApplicationRespone.Discount;
                             await LendingInfo(lendingInfoRq);
-                        }*/
+                        }
 
                         var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
 
                         _RegisIMEIRespone = JsonConvert.DeserializeObject<RegisIMEIRespone>(jsonResponseDevice);
+
+                        if(_GetApplicationRespone.ApplicationRef.Trim() == "SEAMLESS")
+                        {
+                            CheckRegisterIMEIRq checkRegisterIMEIRq = new CheckRegisterIMEIRq();
+                            checkRegisterIMEIRq.AppOrderNo = _GetApplication.ApplicationCode;
+                            CheckRegisterIMEI(checkRegisterIMEIRq);
+                        }
+
                     }
                 }
 
@@ -1138,6 +1148,109 @@ namespace App.Controllers
                 _RegisIMEIRespone.statusCode = ex.Message;
                 Log.Debug("RETURN : " + JsonConvert.SerializeObject(_RegisIMEIRespone));
                 return _RegisIMEIRespone;
+            }
+        }
+
+        [HttpPost]
+        [Route("ReceivedStatus")]
+        public async Task ReceivedStatus([FromBody] ReceivedStatusRq _ReceivedStatus)
+        {
+            try
+            {
+
+                using (HttpClient client = new HttpClient())
+                {
+                    string jsonBody = JsonConvert.SerializeObject(_ReceivedStatus);
+
+                    client.DefaultRequestHeaders.Add("apikey", ApiKey);
+                    client.DefaultRequestHeaders.Add("user", "DEV");
+
+                    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/LendingInfo", content);
+                    int DeviceStatusCode = (int)responseDevice.StatusCode;
+                    Log.Debug("API RETURN : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("RETURN : " + JsonConvert.SerializeObject(ex.Message));
+            }
+
+        }
+
+        [HttpPost]
+        [Route("CheckRegisterIMEI")]
+        public async void CheckRegisterIMEI(CheckRegisterIMEIRq checkRegisterIMEIRq)
+        {
+            GetApplicationRespone _GetApplicationRespone = new GetApplicationRespone();
+            DataTable dt = new DataTable();
+            try
+            {
+                Log.Debug(JsonConvert.SerializeObject(checkRegisterIMEIRq));
+
+                SqlConnection connection = new SqlConnection();
+                connection.ConnectionString = strConnString;
+                System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls11;
+                connection.Open();
+                SqlCommand sqlCommand;
+
+
+                string sql = @$"
+                            SELECT 
+                                AE.RefCode, 
+                                ISNULL(H.InvoiceNo, '') AS InvoiceNo, 
+                                SR.ItemSerial, 
+                                ISNULL(RS.Status, '') AS RegisterIMEI
+                            FROM {SGDIRECT}.[AUTO_SALE_POS_HEADER] H WITH (NOLOCK)
+                            LEFT JOIN {DATABASEK2}.[Application] A WITH(NOLOCK) ON A.ApplicationCode = H.AppOrderNo
+                            LEFT JOIN {DATABASEK2}.[ApplicationExtend] AE WITH(NOLOCK) ON AE.ApplicationId = A.ApplicationId
+                            LEFT JOIN {SGDIRECT}.[AUTO_SALE_POS_SERIAL] SR WITH(NOLOCK) ON SR.AppOrderNo = H.AppOrderNo
+                            LEFT JOIN {DATABASEK2}.[ApplicationRegisIMIE] RS WITH(NOLOCK) ON RS.ApplicationCode = H.AppOrderNo 
+                            AND RS.IMEI = SR.ItemSerial 
+                            AND (RS.Status = 'REGISTER DEVICE SUCCESS' OR RS.Status = 'ALREADY REGISTERED')
+                            WHERE H.[AppOrderNo] = @AppOrderNo";
+
+              
+                sqlCommand = new SqlCommand(sql, connection);
+                sqlCommand.CommandType = CommandType.Text;
+                sqlCommand.Parameters.Add("@AppOrderNo", SqlDbType.NChar);
+                sqlCommand.Parameters["@AppOrderNo"].Value = checkRegisterIMEIRq.AppOrderNo;
+                SqlDataAdapter dtAdapter = new SqlDataAdapter();
+                dtAdapter.SelectCommand = sqlCommand;
+                dtAdapter.Fill(dt);
+                connection.Close();
+
+                CheckRegisterIMEIRp checkRegisterIMEIRp = new CheckRegisterIMEIRp();
+
+                if (dt.Rows.Count > 0)
+                {
+                    Log.Debug(JsonConvert.SerializeObject(dt));
+
+                    if (dt.Rows[0]["RegisterIMEI"].ToString() != "")
+                    {
+                        ReceivedStatusRq receivedStatusRq = new ReceivedStatusRq();
+                        receivedStatusRq.applicationNo = checkRegisterIMEIRp.RefCode.ToString();
+                        receivedStatusRq.type = "REGISTER";
+                        receivedStatusRq.status = "Y";
+                        receivedStatusRq.applicationNo = checkRegisterIMEIRp.ItemSerial.ToString();
+                        ReceivedStatus(receivedStatusRq);
+                    }
+
+
+                }
+                else
+                {
+                    _GetApplicationRespone.statusCode = "Not Found";
+                }
+
+                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_GetApplicationRespone));
+
+                sqlCommand.Parameters.Clear();
+            }
+            catch (Exception ex)
+            {
+                _GetApplicationRespone.statusCode = "FAIL";
+                Log.Debug("RETURN : " + ex.Message);
             }
         }
 

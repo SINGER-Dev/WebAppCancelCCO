@@ -115,7 +115,25 @@ namespace App.Models
     {
         public string id { get; set;}
     }
+    public class CheckRegisterIMEIRq
+    {
+        public string AppOrderNo { get; set; }
+    }
 
+    public class ReceivedStatusRq
+    {
+        public string applicationNo { get; set; }
+        public string type { get; set; }
+        public string status { get; set; }
+        public string serialno { get; set; }
+    }
+    public class CheckRegisterIMEIRp
+    {
+        public string RefCode { get; set; }
+        public string InvoiceNo { get; set; }
+        public string ItemSerial { get; set; }
+        public string RegisterIMEI { get; set; }
+    }
     public class GetApplication
     {
         public string? ApplicationCode { get; set; }
@@ -153,6 +171,8 @@ namespace App.Models
         public string? InterestPercent { get; set; }
         public string? InstallmentPeriod { get; set; }
         public string? Discount { get; set; }
+        public string? ApplicationRef { get; set; }
+        
 
     }
 
