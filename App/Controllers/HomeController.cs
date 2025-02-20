@@ -842,12 +842,12 @@ namespace App.Controllers
                     _GetApplicationRespone.RefCode = dt.Rows[0]["RefCode"].ToString();
 
 
-                    _GetApplicationRespone.Cash = dt.Rows[0]["_GetApplicationRespone"].ToString();
-                    _GetApplicationRespone.DownPayment = dt.Rows[0]["_GetApplicationRespone"].ToString();
-                    _GetApplicationRespone.ApplicationDate = dt.Rows[0]["_GetApplicationRespone"].ToString();
-                    _GetApplicationRespone.InterestPercent = dt.Rows[0]["_GetApplicationRespone"].ToString();
-                    _GetApplicationRespone.InstallmentPeriod = dt.Rows[0]["_GetApplicationRespone"].ToString();
-                    _GetApplicationRespone.Discount = dt.Rows[0]["_GetApplicationRespone"].ToString();
+                    _GetApplicationRespone.Cash = dt.Rows[0]["Cash"].ToString();
+                    _GetApplicationRespone.DownPayment = dt.Rows[0]["DownPayment"].ToString();
+                    _GetApplicationRespone.ApplicationDate = dt.Rows[0]["ApplicationDate"].ToString();
+                    _GetApplicationRespone.InterestPercent = dt.Rows[0]["InterestPercent"].ToString();
+                    _GetApplicationRespone.InstallmentPeriod = dt.Rows[0]["InstallmentPeriod"].ToString();
+                    _GetApplicationRespone.Discount = dt.Rows[0]["Discount"].ToString();
                     _GetApplicationRespone.ApplicationRef = dt.Rows[0]["ApplicationRef"].ToString();
 
                     
@@ -1130,7 +1130,7 @@ namespace App.Controllers
 
                         _RegisIMEIRespone = JsonConvert.DeserializeObject<RegisIMEIRespone>(jsonResponseDevice);
 
-                        if(_GetApplicationRespone.ApplicationRef.Trim() == "SEAMLESS")
+                        if (_GetApplicationRespone.ApplicationRef.Trim() == "SEAMLESS")
                         {
                             CheckRegisterIMEIRq checkRegisterIMEIRq = new CheckRegisterIMEIRq();
                             checkRegisterIMEIRq.AppOrderNo = _GetApplication.ApplicationCode;
