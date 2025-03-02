@@ -111,7 +111,7 @@
 
                             @if ("LOCKPHONE" == result.loanTypeCate.ToString().Trim() && "SGC" == result.OU_Code.ToString().Trim())
                             {
-                                @if (result.ApplicationStatusID == "CLOSING" && result.signedStatus == "รอลงนาม" && result.ProductSerialNo.Trim() != "")
+                                @if (result.ApplicationStatusID == "CLOSING" && (result.signedStatus.Trim() == "รอลงนาม" || result.signedStatus.Trim() == "-") && result.ProductSerialNo.Trim() != "")
                                 {
                                     <i class="GenEsignature fa-solid fa-paper-plane" data-applicationcode="@result.ApplicationCode" style="cursor: pointer;color: coral;"></i>
                                 }
