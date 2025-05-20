@@ -997,7 +997,7 @@ DROP TABLE #PAYMENT_TEMP;
 
                         //_MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
                         _MessageReturn.StatusCode = "200";
-                        _MessageReturn.Message = "SUCCESS.";
+                        _MessageReturn.Message = "Success.";
                     }
                 }
 
