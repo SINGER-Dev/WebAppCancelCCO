@@ -202,111 +202,118 @@ namespace App.Controllers
                     connection.Open();
 
                     var sql = @$"
-                    -- Step 1: Insert into temporary table
-                    SELECT signedStatus, statusReceived, documentno
-                    INTO #CONTRACTS_TEMP
-                    FROM {SGCESIGNATURE}.[contracts] WITH (NOLOCK)
-                    where   (CONVERT(nvarchar,createdAt,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '') 
-                    AND (CONVERT(nvarchar,createdAt,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
 
-                    -- Step 2: Main query
-                    SELECT 
-                        a.ApplicationID,
-                        a.ApplicationCode,
-                        a.AccountNo,
-                        a.SaleDepCode,
-                        a.SaleDepName,
-                        CONVERT(NVARCHAR, a.ApplicationDate, 20) AS ApplicationDate,
-                        CONVERT(NVARCHAR, a.ApplicationDate, 20) AS ApplicationDate2,
-                        a.ProductID,
-                        a.ProductModelName,
-                        a.CustomerID,
-                        cus.FirstName + ' ' + cus.LastName AS Cusname,
-                        cus.MobileNo1 AS CusMobile,
-                        a.SaleName,
-                        a.SaleTelephoneNo,
-                         ISNULL(CASE 
-                            WHEN EXISTS (SELECT 1 FROM {SGDIRECT}.[AUTO_SALE_POS_SERIAL] s WITH (NOLOCK)
-                                         WHERE s.AppOrderNo = a.ApplicationCode) 
-                            THEN (SELECT STUFF((SELECT ', ' + s.ItemSerial
-                                                FROM {SGDIRECT}.[AUTO_SALE_POS_SERIAL] s WITH (NOLOCK)
-                                                WHERE s.AppOrderNo = a.ApplicationCode
-                                                FOR XML PATH('')), 1, 1, ''))
-                            ELSE a.ProductSerialNo
-                        END,'') AS ProductSerialNo,
-                        a.ApplicationStatusID,
-                        CASE 
-                            WHEN con.signedStatus = 'COMP-Done' THEN N'เรียบร้อย' 
-                            WHEN con.signedStatus = 'Initial' THEN N'รอลงนาม'
-                            WHEN ISNULL(con.signedStatus, 'NULL') = 'NULL' THEN N'-'
-                            ELSE con.signedStatus 
-                        END AS signedStatus,
-                        CASE WHEN ISNULL(con.statusReceived, '0') = '1' THEN N'รับสินค้าแล้ว' ELSE N'ยังไม่รับสินค้า' END AS StatusReceived,
-                        CASE WHEN ISNULL(c.ESIG_CONFIRM_STATUS, '0') = '1' THEN N'เรียบร้อย'  ELSE N'รอลงนาม' END AS ESIG_CONFIRM_STATUS,
-                        CASE WHEN ISNULL(c.RECEIVE_FLAG, '0') = '1' THEN N'รับสินค้าแล้ว' ELSE N'รอลงนาม' END AS RECEIVE_FLAG,
-                        a.ApprovedDate,
-                        CASE 
-                            WHEN appex.loanTypeCate = 'HP' THEN N'เรียบร้อย' 
-                            WHEN isnull(regis.IMEI,'') <> '' THEN N'เรียบร้อย' 
-                            ELSE N'รอลงทะเบียน' 
-                        END AS numregis,
-                        CASE 
-                            WHEN c.ESIG_CONFIRM_STATUS = '1' AND con.signedStatus = 'COMP-Done' THEN N'เรียบร้อย' 
-                            WHEN c.ESIG_CONFIRM_STATUS = '0' OR con.signedStatus = 'Initial' THEN N'รอลงนาม'
-                            ELSE N'ลงนามไม่สำเร็จ' 
-                        END AS SignedText,
-                        CASE WHEN checkcon.numdoc > 1 THEN N'พบรายการซ้ำ' ELSE N'ปกติ' END AS NumDoc,
-                        CASE 
-                            WHEN new.newnum = 1 AND new.arm_Loaded_flag IN (0, 1) THEN N'เรียบร้อย' 
-                            WHEN new.newnum = 1 AND new.arm_Loaded_flag = 2 THEN N'CANCELLED'
-                            WHEN new.newnum > 1 THEN N'รายการซ้ำ'
-                            ELSE N'ไม่พบรายการ' 
-                        END AS NewNum,
-                        CASE 
-                            WHEN pay.paynum = 1 AND pay.ARM_RECEIPT_STAT = 'APPROVED' THEN N'เรียบร้อย' 
-                            WHEN pay.paynum = 1 AND pay.ARM_RECEIPT_STAT = 'CANCELLED' THEN N'CANCELLED'
-                            WHEN pay.paynum > 1 THEN N'รายการซ้ำ'
-                            ELSE N'ไม่พบรายการ' 
-                        END AS PayNum,
-                        '' AS LINE_STATUS,
-                        '' AS TRANSFER_DATE,
-                        appex.RefCode,
-                        ISNULL(LEFT(appex.OU_Code, 3),'') AS OU_Code,
-                        appex.loanTypeCate,
-                        'DUMMY' AS Ref4,
-                        '' as appIns, --ISNULL(appIns.ApplicationID,'') AS appIns
-                        ISNULL(regis.Status,'NULL') AS  Status
-                    FROM {DATABASEK2}.[Application] a WITH (NOLOCK)
-                    INNER JOIN {DATABASEK2}.[ApplicationExtend] appex WITH (NOLOCK) ON appex.ApplicationID = a.ApplicationID
-                    --LEFT JOIN {DATABASEK2}.[ApplicationInsurance] appIns WITH (NOLOCK) ON appIns.ApplicationID = a.ApplicationID
-                    LEFT JOIN {DATABASEK2}.[Customer] cus WITH (NOLOCK) ON cus.CustomerID = a.CustomerID
-                    LEFT JOIN {DATABASEK2}.[Application_ESIG_STATUS] c WITH (NOLOCK) ON a.ApplicationCode = c.APPLICATION_CODE
-                    LEFT JOIN {DATABASEK2}.[ApplicationRegisIMIE] regis WITH (NOLOCK) ON regis.IMEI = a.ProductSerialNo and regis.Status IN ('REGISTER DEVICE SUCCESS', 'ALREADY REGISTERED')
-                    LEFT JOIN #CONTRACTS_TEMP con WITH (NOLOCK) ON a.ApplicationCode = con.documentno
-                    LEFT JOIN (
-                        SELECT COUNT(documentno) AS numdoc, documentno
-                        FROM #CONTRACTS_TEMP WITH (NOLOCK)
-                        GROUP BY documentno
-                    ) checkcon ON checkcon.documentno = a.ApplicationCode
-                    LEFT JOIN (
-                        SELECT COUNT(ARM_ACC_NO) AS newnum, ARM_ACC_NO, arm_Loaded_flag
-                        FROM {DATABASEK2}.[ARM_T_NEWSALES] WITH (NOLOCK)
-                        WHERE CREATED_USER = 'SG Finance'
-                          AND (CONVERT(date,CREATED_DATE,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '')
-				                    AND (CONVERT(date,CREATED_DATE,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
-                        GROUP BY ARM_ACC_NO, arm_Loaded_flag
-                    ) new ON new.ARM_ACC_NO = a.AccountNo
-                    LEFT JOIN (
-                        SELECT COUNT(ARM_ACC_NO) AS paynum, ARM_ACC_NO, ARM_RECEIPT_STAT
-                        FROM {DATABASEK2}.[ARM_T_PAYMENT] WITH (NOLOCK)
-                        WHERE CREATED_USER = 'SG Finance'
-                         AND (CONVERT(date,CREATED_DATE,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '')
-				                    AND (CONVERT(date,CREATED_DATE,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
-                        GROUP BY ARM_ACC_NO, ARM_RECEIPT_STAT
-                    ) pay ON pay.ARM_ACC_NO = a.AccountNo
+DECLARE 
+    @TodayStart DATETIME = CAST(@startDate AS DATE),
+    @TomorrowStart DATETIME = DATEADD(DAY, 1, CAST(@endDate AS DATE));
 
-                    WHERE (CONVERT(date,a.ApplicationDate,23) >= CONVERT(date,@startdate,23) OR ISNULL(@startdate,'') = '')
-                      AND (CONVERT(date,a.ApplicationDate,23) <= CONVERT(date,@enddate,23) OR ISNULL(@enddate,'') = '')
+
+                    -- STEP 0: สร้าง Temp สำหรับ contracts
+SELECT signedStatus, statusReceived, documentno
+INTO #CONTRACTS_TEMP
+FROM {SGCESIGNATURE}.[contracts] WITH (NOLOCK)
+WHERE createdAt >= @TodayStart AND createdAt < @TomorrowStart;
+
+-- STEP 1: ข้อมูล Serial
+SELECT 
+    s.AppOrderNo,
+    SerialList = STUFF((
+        SELECT ', ' + s2.ItemSerial
+        FROM {SGDIRECT}.[AUTO_SALE_POS_SERIAL] s2 WITH (NOLOCK)
+        WHERE s2.AppOrderNo = s.AppOrderNo
+        FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '')
+INTO #SERIAL_TEMP
+FROM {SGDIRECT}.[AUTO_SALE_POS_SERIAL] s WITH (NOLOCK)
+GROUP BY s.AppOrderNo;
+
+-- STEP 2: เอกสารซ้ำใน CONTRACTS
+SELECT COUNT(documentno) AS numdoc, documentno
+INTO #CHECK_CONTRACT
+FROM #CONTRACTS_TEMP WITH (NOLOCK)
+GROUP BY documentno;
+
+-- STEP 3: ARM_T_NEWSALES
+SELECT COUNT(ARM_ACC_NO) AS newnum, ARM_ACC_NO, arm_Loaded_flag
+INTO #NEWSALES_TEMP
+FROM {DATABASEK2}.[ARM_T_NEWSALES] WITH (NOLOCK)
+WHERE CREATED_USER = 'SG Finance'
+  AND (@TodayStart IS NULL OR CREATED_DATE >= @TodayStart)
+  AND (@TomorrowStart IS NULL OR CREATED_DATE <= @TomorrowStart)
+GROUP BY ARM_ACC_NO, arm_Loaded_flag;
+
+-- STEP 4: ARM_T_PAYMENT
+SELECT COUNT(ARM_ACC_NO) AS paynum, ARM_ACC_NO, ARM_RECEIPT_STAT
+INTO #PAYMENT_TEMP
+FROM {DATABASEK2}.[ARM_T_PAYMENT] WITH (NOLOCK)
+WHERE CREATED_USER = 'SG Finance'
+  AND (@TodayStart IS NULL OR CREATED_DATE >= @TodayStart)
+  AND (@TomorrowStart IS NULL OR CREATED_DATE <= @TomorrowStart)
+GROUP BY ARM_ACC_NO, ARM_RECEIPT_STAT;
+
+-- STEP 5: MAIN QUERY
+SELECT 
+    a.ApplicationID,
+    a.ApplicationCode,
+    a.AccountNo,
+    a.SaleDepCode,
+    a.SaleDepName,
+    CONVERT(NVARCHAR, a.ApplicationDate, 20) AS ApplicationDate,
+    CONVERT(NVARCHAR, a.ApplicationDate, 20) AS ApplicationDate2,
+    a.ProductID,
+    a.ProductModelName,
+    a.CustomerID,
+    cus.FirstName + ' ' + cus.LastName AS Cusname,
+    cus.MobileNo1 AS CusMobile,
+    a.SaleName,
+    a.SaleTelephoneNo,
+    ISNULL(ISNULL(serial.SerialList, a.ProductSerialNo), '') AS ProductSerialNo,
+    a.ApplicationStatusID,
+    CASE 
+        WHEN con.signedStatus = 'COMP-Done' THEN N'เรียบร้อย' 
+        WHEN con.signedStatus = 'Initial' THEN N'รอลงนาม'
+        WHEN ISNULL(con.signedStatus, 'NULL') = 'NULL' THEN N'-'
+        ELSE con.signedStatus 
+    END AS signedStatus,
+    CASE WHEN ISNULL(con.statusReceived, '0') = '1' THEN N'รับสินค้าแล้ว' ELSE N'ยังไม่รับสินค้า' END AS StatusReceived,
+    a.ApprovedDate,
+    CASE 
+        WHEN appex.loanTypeCate = 'HP' THEN N'เรียบร้อย' 
+        WHEN ISNULL(regis.IMEI, '') <> '' THEN N'เรียบร้อย' 
+        ELSE N'รอลงทะเบียน' 
+    END AS numregis,
+    CASE WHEN checkcon.numdoc > 1 THEN N'พบรายการซ้ำ' ELSE N'ปกติ' END AS NumDoc,
+    CASE 
+        WHEN new.newnum = 1 AND new.arm_Loaded_flag IN (0, 1) THEN N'เรียบร้อย' 
+        WHEN new.newnum = 1 AND new.arm_Loaded_flag = 2 THEN N'CANCELLED'
+        WHEN new.newnum > 1 THEN N'รายการซ้ำ'
+        ELSE N'ไม่พบรายการ' 
+    END AS NewNum,
+    CASE 
+        WHEN pay.paynum = 1 AND pay.ARM_RECEIPT_STAT = 'APPROVED' THEN N'เรียบร้อย' 
+        WHEN pay.paynum = 1 AND pay.ARM_RECEIPT_STAT = 'CANCELLED' THEN N'CANCELLED'
+        WHEN pay.paynum > 1 THEN N'รายการซ้ำ'
+        ELSE N'ไม่พบรายการ' 
+    END AS PayNum,
+    '' AS LINE_STATUS,
+    '' AS TRANSFER_DATE,
+    appex.RefCode,
+    ISNULL(LEFT(appex.OU_Code, 3), '') AS OU_Code,
+    appex.loanTypeCate,
+    'DUMMY' AS Ref4,
+    '' AS appIns,
+    ISNULL(regis.Status, 'NULL') AS Status
+FROM {DATABASEK2}.[Application] a WITH (NOLOCK)
+INNER JOIN {DATABASEK2}.[ApplicationExtend] appex WITH (NOLOCK) ON appex.ApplicationID = a.ApplicationID
+LEFT JOIN {DATABASEK2}.[Customer] cus WITH (NOLOCK) ON cus.CustomerID = a.CustomerID
+LEFT JOIN {DATABASEK2}.[ApplicationRegisIMIE] regis WITH (NOLOCK)
+    ON regis.IMEI = a.ProductSerialNo AND regis.Status IN ('REGISTER DEVICE SUCCESS', 'ALREADY REGISTERED')
+LEFT JOIN #CONTRACTS_TEMP con ON a.ApplicationCode = con.documentno
+LEFT JOIN #CHECK_CONTRACT checkcon ON checkcon.documentno = a.ApplicationCode
+LEFT JOIN #NEWSALES_TEMP new ON new.ARM_ACC_NO = a.AccountNo
+LEFT JOIN #PAYMENT_TEMP pay ON pay.ARM_ACC_NO = a.AccountNo
+LEFT JOIN #SERIAL_TEMP serial ON serial.AppOrderNo = a.ApplicationCode
+   WHERE (CONVERT(date,a.ApplicationDate,23) >= CONVERT(date,@TodayStart,23) OR ISNULL(@TodayStart,'') = '')
+                      AND (CONVERT(date,a.ApplicationDate,23) <= CONVERT(date,@TomorrowStart,23) OR ISNULL(@TomorrowStart,'') = '')
                       AND (@status IS NULL OR a.ApplicationStatusID = @status)
                       AND (@loanTypeCate IS NULL OR appex.loanTypeCate = @loanTypeCate)
                       AND a.ApplicationDate >= '2024-05-01'
@@ -315,10 +322,16 @@ namespace App.Controllers
                       AND (@ProductSerialNo IS NULL OR a.ProductSerialNo = @ProductSerialNo)
                       AND (@CustomerID IS NULL OR a.CustomerID = @CustomerID)
                       AND (@CustomerName IS NULL OR cus.FirstName + ' ' + cus.LastName LIKE '%' + @CustomerName + '%')
-                    ORDER BY a.ApplicationDate DESC;
+ORDER BY a.ApplicationDate DESC
+OPTION (RECOMPILE);
 
-                    -- Drop temporary table
-                    DROP TABLE #CONTRACTS_TEMP;";
+-- STEP 6: ลบ Temp Table
+DROP TABLE #CONTRACTS_TEMP;
+DROP TABLE #SERIAL_TEMP;
+DROP TABLE #CHECK_CONTRACT;
+DROP TABLE #NEWSALES_TEMP;
+DROP TABLE #PAYMENT_TEMP;
+";
 
                     var parameters = new
                     {
@@ -961,18 +974,19 @@ namespace App.Controllers
 
                 var requestBody = new
                 {
-                    APPLICATION_CODE = _C100StatusRq.ApplicationCode
+                    applicationCode = _C100StatusRq.ApplicationCode
                 };
 
                 using (HttpClient client = new HttpClient())
                 {
                     string jsonBody = JsonConvert.SerializeObject(requestBody);
 
-                    client.DefaultRequestHeaders.Add("apikey", ApiKey);
-                    client.DefaultRequestHeaders.Add("user", "DEV");
+                    //client.DefaultRequestHeaders.Add("apikey", ApiKey);
+                    //client.DefaultRequestHeaders.Add("user", "DEV");
 
                     var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/api/v2/GenEsignature", content);
+                    HttpResponseMessage responseDevice = await client.PostAsync("https://sg-posservice.singerthai.co.th:10082/v1/LOS/SGF_ReCreateESig", content);
+                    //HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/api/v2/GenEsignature", content);
                     int DeviceStatusCode = (int)responseDevice.StatusCode;
 
                     Log.Debug("API RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
@@ -981,7 +995,9 @@ namespace App.Controllers
                     {
                         var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
 
-                        _MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
+                        //_MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
+                        _MessageReturn.StatusCode = "200";
+                        _MessageReturn.Message = "SUCCESS.";
                     }
                 }
 
