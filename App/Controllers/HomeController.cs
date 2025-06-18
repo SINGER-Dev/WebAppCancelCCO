@@ -16,6 +16,9 @@ using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using static System.Net.Mime.MediaTypeNames;
 using Microsoft.IdentityModel.Tokens;
 using System.Net.Http.Headers;
+using Newtonsoft.Json.Linq;
+using AspNetCoreGeneratedDocument;
+using App.Model;
 
 namespace App.Controllers
 {
@@ -82,6 +85,85 @@ namespace App.Controllers
             ViewBag.FullName = HttpContext.Session.GetString("FullName");
             return View();
         }
+
+        public IActionResult BypassCustomer()
+        {
+            var EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            if (EMP_CODE == null)
+            {
+                return Redirect("/Login");
+            }
+            var RoleDescription = HttpContext.Session.GetString("RoleDescription");
+
+            bool containsBypass = RoleDescription.Contains("BypassCustomer");
+
+            if (containsBypass == false)
+            {
+                return Redirect("/Home/UnderConstruction");
+            }
+
+            ViewBag.EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            ViewBag.FullName = HttpContext.Session.GetString("FullName");
+            return View();
+        }
+
+        public IActionResult BypassIMEI()
+        {
+            var EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            if (EMP_CODE == null)
+            {
+                return Redirect("/Login");
+            }
+
+            var RoleDescription = HttpContext.Session.GetString("RoleDescription");
+
+            bool containsBypass = RoleDescription.Contains("BypassIMEI");
+
+            if (containsBypass == false)
+            {
+                return Redirect("/Home/UnderConstruction");
+            }
+
+            ViewBag.EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            ViewBag.FullName = HttpContext.Session.GetString("FullName");
+            return View();
+        }
+
+        public IActionResult ChangeIMEI()
+        {
+            var EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            if (EMP_CODE == null)
+            {
+                return Redirect("/Login");
+            }
+
+            var RoleDescription = HttpContext.Session.GetString("RoleDescription");
+
+            bool containsBypass = RoleDescription.Contains("ChangeIMEI");
+
+            if (containsBypass == false)
+            {
+                return Redirect("/Home/UnderConstruction");
+            }
+
+            ViewBag.EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            ViewBag.FullName = HttpContext.Session.GetString("FullName");
+            return View();
+        }
+
+        public IActionResult UnderConstruction()
+        {
+            var EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            if (EMP_CODE == null)
+            {
+                return Redirect("/Login");
+            }
+
+            ViewBag.EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            ViewBag.FullName = HttpContext.Session.GetString("FullName");
+            return View();
+        }
+
 
         public async Task<IActionResult> FormCancel(string ApplicationCode)
         {
@@ -1495,6 +1577,120 @@ DROP TABLE #PAYMENT_TEMP;
             public string ApplicationID { get; set; }
             public string Remark { get; set; }
             public string CANCEL_USER { get; set; }
+        }
+
+        [HttpPost]
+        public ModelResult PostBypassCustomer(BypassCustomer _bypassCustomer)
+        {
+            var EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+
+            _bypassCustomer.empCode = EMP_CODE;
+            Log.Information(JsonConvert.SerializeObject(_bypassCustomer));
+            ModelResult modelResult = new ModelResult();
+
+            try
+            {
+                var jsonstring = JsonConvert.SerializeObject(_bypassCustomer);
+                var client = new HttpClient();
+                string apiUrl = "https://sg-posservice.singerthai.co.th:10082/v1/LOS/ByPassCustomer";
+                var content = new StringContent(jsonstring, null, "application/json");
+                HttpResponseMessage response = client.PostAsync(apiUrl, content).Result;
+                if (response.IsSuccessStatusCode)
+                {
+                    string result = response.Content.ReadAsStringAsync().Result;
+
+                    modelResult =  JsonConvert.DeserializeObject<ModelResult>(result);
+                }
+                else if (response.StatusCode == HttpStatusCode.BadRequest)
+                {
+                    string result = response.Content.ReadAsStringAsync().Result;
+
+                    modelResult = JsonConvert.DeserializeObject<ModelResult>(result);
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex.Message);
+            }
+            return modelResult;
+
+        }
+
+        [HttpPost]
+        public ModelResult PostBypassIMEI(BypassImei _bypassImei)
+        {
+            var EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+
+            _bypassImei.empCode = EMP_CODE;
+            Log.Information(JsonConvert.SerializeObject(_bypassImei));
+            ModelResult modelResult = new ModelResult();
+
+            try
+            {
+                var jsonstring = JsonConvert.SerializeObject(_bypassImei);
+                var client = new HttpClient();
+                string apiUrl = "https://sg-posservice.singerthai.co.th:10082/v1/LOS/ByPassIMEI";
+                var content = new StringContent(jsonstring, null, "application/json");
+                HttpResponseMessage response = client.PostAsync(apiUrl, content).Result;
+                if (response.IsSuccessStatusCode)
+                {
+                    string result = response.Content.ReadAsStringAsync().Result;
+
+                    modelResult = JsonConvert.DeserializeObject<ModelResult>(result);
+                }
+                else if (response.StatusCode == HttpStatusCode.BadRequest)
+                {
+                    string result = response.Content.ReadAsStringAsync().Result;
+
+                    modelResult = JsonConvert.DeserializeObject<ModelResult>(result);
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex.Message);
+            }
+            return modelResult;
+
+        }
+
+        [HttpPost]
+        public ModelResult PostChangeIMEI(ChangeImei _changeImei)
+        {
+            var EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+
+            _changeImei.empCode = EMP_CODE;
+            Log.Information(JsonConvert.SerializeObject(_changeImei));
+            ModelResult modelResult = new ModelResult();
+
+            try
+            {
+                var jsonstring = JsonConvert.SerializeObject(_changeImei);
+                var client = new HttpClient();
+                string apiUrl = "https://sg-posservice.singerthai.co.th:10082/v1/LOS/ChangeIMEI";
+                var content = new StringContent(jsonstring, null, "application/json");
+                HttpResponseMessage response = client.PostAsync(apiUrl, content).Result;
+                if (response.IsSuccessStatusCode)
+                {
+                    string result = response.Content.ReadAsStringAsync().Result;
+
+                    modelResult = JsonConvert.DeserializeObject<ModelResult>(result);
+                }
+                else if (response.StatusCode == HttpStatusCode.BadRequest)
+                {
+                    string result = response.Content.ReadAsStringAsync().Result;
+
+                    modelResult = JsonConvert.DeserializeObject<ModelResult>(result);
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex.Message);
+            }
+            return modelResult;
+
         }
     }
 }

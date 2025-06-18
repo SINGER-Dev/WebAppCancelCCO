@@ -194,4 +194,25 @@ namespace App.Models
         public string Email { get; set; }
     }
 
+    public class BypassCustomer
+    {
+        public string IdCard { get; set; }
+        public string Remark { get; set; }
+        public string empCode { get; set; }
+    }
+
+    public class BypassImei
+    {
+        public string Imei { get; set; }
+        public string Remark { get; set; }
+        public string empCode { get; set; }
+    }
+
+    public class ChangeImei
+    {
+        public string AccountNo { get; set; }
+        public string OldImei { get; set; }
+        public string NewImei { get; set; }
+        public string empCode { get; set; }
+    }
 }

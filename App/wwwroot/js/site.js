@@ -189,7 +189,215 @@
             }
         });
 
-    
+        $("#btnBypassCustomer").click(function (e) {
+
+            checkSession();
+
+            e.preventDefault();
+
+            if ($.trim($('#IdCard').val()) == "" || $.trim($('#Remark').val()) == "") {
+                Swal.fire({
+                    icon: "error",
+                    title: "Oops...",
+                    text: "กรุณากรอกข้อมูลให้ครบถ้วน"
+                })
+            }
+            else {
+
+                Swal.fire({
+                    title: "ยืนยันการ By Pass Customer " + $('#IdCard').val(),
+                    showCancelButton: true,
+                    confirmButtonText: "ยืนยัน",
+                    cancelButtonText: "ออก",
+                }).then((result) => {
+                    /* Read more about isConfirmed, isDenied below */
+                    if (result.isConfirmed) {
+
+
+                        var formData = $("#FormBypassCustomer").serialize(); // Serialize form data
+                        $.ajax({
+                            url: "/Home/PostBypassCustomer", // Action URL
+                            type: "POST", // Method (POST in this case)
+                            data: formData,
+                            success: function (result) {
+                                if (result.status == "Success") {
+                                    Swal.fire({
+                                        title: "By Pass Customer",
+                                        text: result.message,
+                                        icon: "success"
+                                    }).then(function () {
+                                        // Redirect the user
+                                        window.location.href = "/";
+                                    });
+                                }
+                                else if (result.status == "BadRequest") {
+                                    Swal.fire({
+                                        title: "By Pass Customer",
+                                        text: result.message,
+                                        icon: "error"
+                                    }).then(function () {
+                                        // Redirect the user
+                                        window.location.href = "/";
+                                    });
+                                }
+                                else {
+                                    Swal.fire({
+                                        icon: "error",
+                                        title: "Oops...",
+                                        text: result
+                                    }).then(function () {
+                                        location.reload();
+                                    });
+                                }
+                            },
+                            error: function (xhr, status, error) {
+                                console.error(error);
+                            }
+                        });
+                    }
+                });
+            }
+        });
+
+        $("#btnBypassIMEI").click(function (e) {
+
+            checkSession();
+
+            e.preventDefault();
+
+            if ($.trim($('#Imei').val()) == "" || $.trim($('#Remark').val()) == "") {
+                Swal.fire({
+                    icon: "error",
+                    title: "Oops...",
+                    text: "กรุณากรอกข้อมูลให้ครบถ้วน"
+                })
+            }
+            else {
+
+                Swal.fire({
+                    title: "ยืนยันการ By Pass IMEI " + $('#Imei').val(),
+                    showCancelButton: true,
+                    confirmButtonText: "ยืนยัน",
+                    cancelButtonText: "ออก",
+                }).then((result) => {
+                    /* Read more about isConfirmed, isDenied below */
+                    if (result.isConfirmed) {
+
+
+                        var formData = $("#FormBypassIMEI").serialize(); // Serialize form data
+                        $.ajax({
+                            url: "/Home/PostBypassIMEI", // Action URL
+                            type: "POST", // Method (POST in this case)
+                            data: formData,
+                            success: function (result) {
+                                if (result.status == "Success") {
+                                    Swal.fire({
+                                        title: "By Pass IMEI",
+                                        text: result.message,
+                                        icon: "success"
+                                    }).then(function () {
+                                        // Redirect the user
+                                        window.location.href = "/";
+                                    });
+                                }
+                                else if (result.status == "BadRequest") {
+                                    Swal.fire({
+                                        title: "By Pass IMEI",
+                                        text: result.message,
+                                        icon: "error"
+                                    }).then(function () {
+                                        // Redirect the user
+                                        window.location.href = "/";
+                                    });
+                                }
+                                else {
+                                    Swal.fire({
+                                        icon: "error",
+                                        title: "Oops...",
+                                        text: result
+                                    }).then(function () {
+                                        location.reload();
+                                    });
+                                }
+                            },
+                            error: function (xhr, status, error) {
+                                console.error(error);
+                            }
+                        });
+                    }
+                });
+            }
+        });
+
+        $("#btnChangeIMEI").click(function (e) {
+
+            checkSession();
+
+            e.preventDefault();
+
+            if ($.trim($('#AccountNo').val()) == "" || $.trim($('#OldImei').val()) == "" || $.trim($('#NewImei').val()) == "") {
+                Swal.fire({
+                    icon: "error",
+                    title: "Oops...",
+                    text: "กรุณากรอกข้อมูลให้ครบถ้วน"
+                })
+            }
+            else {
+
+                Swal.fire({
+                    title: "ยืนยันการเปลี่ยน IMEI " ,
+                    showCancelButton: true,
+                    confirmButtonText: "ยืนยัน",
+                    cancelButtonText: "ออก",
+                }).then((result) => {
+                    /* Read more about isConfirmed, isDenied below */
+                    if (result.isConfirmed) {
+
+
+                        var formData = $("#FormChangeIMEI").serialize(); // Serialize form data
+                        $.ajax({
+                            url: "/Home/PostChangeIMEI", // Action URL
+                            type: "POST", // Method (POST in this case)
+                            data: formData,
+                            success: function (result) {
+                                if (result.status == "Success") {
+                                    Swal.fire({
+                                        title: "Change IMEI",
+                                        text: result.message,
+                                        icon: "success"
+                                    }).then(function () {
+                                        // Redirect the user
+                                        window.location.href = "/";
+                                    });
+                                }
+                                else if (result.status == "BadRequest") {
+                                    Swal.fire({
+                                        title: "Change IMEI",
+                                        text: result.message,
+                                        icon: "error"
+                                    }).then(function () {
+                                        // Redirect the user
+                                        window.location.href = "/";
+                                    });
+                                }
+                                else {
+                                    Swal.fire({
+                                        icon: "error",
+                                        title: "Oops...",
+                                        text: result
+                                    }).then(function () {
+                                        location.reload();
+                                    });
+                                }
+                            },
+                            error: function (xhr, status, error) {
+                                console.error(error);
+                            }
+                        });
+                    }
+                });
+            }
+        });
 
         $("#btnLogin").click(function () {
             $('#btnLogin').prop("disabled", true);

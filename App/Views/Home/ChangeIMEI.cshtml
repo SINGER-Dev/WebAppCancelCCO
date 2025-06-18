@@ -1,0 +1,49 @@
+﻿@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@{
+}
+@model ChangeImei
+
+<form class="row g-3 pt-3" id="FormChangeIMEI" asp-action="PostChangeIMEI" method="post">
+
+    <div class="container mt-5">
+        <h2>เปลี่ยน IMEI</h2>
+
+        <form id="ChangeIMEI" action="/Home/PostChangeIMEI" method="post">
+            <div class="mb-3 row">
+                <label for="AccountNo" class="col-sm-2 col-form-label">AccountNo</label>
+                <div class="col-sm-4">
+                    <input type="text" class="form-control" id="AccountNo" name="AccountNo" placeholder="เลขสัญญาเดิม">
+                </div>
+            </div>
+
+            <div class="mb-3 row">
+                <label for="OldImei" class="col-sm-2 col-form-label">หมายเลข IMEI เดิม</label>
+                <div class="col-sm-4">
+                    <input type="text" class="form-control" id="OldImei" name="OldImei" placeholder="หมายเลข IMEI เดิม">
+                </div>
+            </div>
+
+            <div class="mb-3 row">
+                <label for="NewImei" class="col-sm-2 col-form-label">หมายเลข IMEI ใหม่</label>
+                <div class="col-sm-4">
+                    <input type="text" class="form-control" id="NewImei" name="NewImei" placeholder="หมายเลข IMEI ใหม่">
+                </div>
+            </div>
+
+            <div class="mb-3 row">
+                <div class="col-sm-6">
+                    <button type="button" class="btn btn-warning" id="btnChangeIMEI">ยืนยัน เปลี่ยน IMEI</button>
+                </div>
+            </div>
+        </form>
+
+        <div class="loaddong">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+
+    </div>
+</form>
