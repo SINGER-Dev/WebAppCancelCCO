@@ -335,7 +335,7 @@
 
             e.preventDefault();
 
-            if ($.trim($('#AccountNo').val()) == "" || $.trim($('#OldImei').val()) == "" || $.trim($('#NewImei').val()) == "") {
+            if ($.trim($('#accNo').val()) == "" || $.trim($('#OldImei').val()) == "" || $.trim($('#NewImei').val()) == "") {
                 Swal.fire({
                     icon: "error",
                     title: "Oops...",

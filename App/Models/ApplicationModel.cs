@@ -210,9 +210,9 @@ namespace App.Models
 
     public class ChangeImei
     {
-        public string AccountNo { get; set; }
-        public string OldImei { get; set; }
-        public string NewImei { get; set; }
+        public string accNo { get; set; }
+        public string oldImei { get; set; }
+        public string newImei { get; set; }
         public string empCode { get; set; }
     }
 }
