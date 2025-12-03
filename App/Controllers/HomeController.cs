@@ -1,24 +1,27 @@
-﻿using App.Models;
+﻿using App.Model;
+using App.Models;
+using AspNetCoreGeneratedDocument;
+using Azure;
+using Azure.Core;
+using Dapper;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.Data.SqlClient;
+using Microsoft.Identity.Client;
+using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using RestSharp;
+using Serilog;
 using System.Data;
 using System.Diagnostics;
-using System.Net;
-using System.Xml;
-using Serilog;
-using Newtonsoft.Json;
-using System.Text;
-using RestSharp;
 using System.Globalization;
-using Dapper;
-using Microsoft.Identity.Client;
-using Microsoft.AspNetCore.Mvc.ApplicationModels;
-using static System.Net.Mime.MediaTypeNames;
-using Microsoft.IdentityModel.Tokens;
+using System.Net;
 using System.Net.Http.Headers;
-using Newtonsoft.Json.Linq;
-using AspNetCoreGeneratedDocument;
-using App.Model;
+using System.Text;
+using System.Text.Json;
+using System.Xml;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace App.Controllers
 {
@@ -333,6 +336,7 @@ WHERE CREATED_USER = 'SG Finance'
 GROUP BY ARM_ACC_NO, ARM_RECEIPT_STAT;
 
 -- STEP 5: MAIN QUERY
+--ISNULL(ISNULL(serial.SerialList, a.ProductSerialNo), '') AS ProductSerialNo, ==> 
 SELECT 
     a.ApplicationID,
     a.ApplicationCode,
@@ -348,7 +352,7 @@ SELECT
     cus.MobileNo1 AS CusMobile,
     a.SaleName,
     a.SaleTelephoneNo,
-    ISNULL(ISNULL(serial.SerialList, a.ProductSerialNo), '') AS ProductSerialNo,
+    a.ProductSerialNo AS ProductSerialNo,
     a.ApplicationStatusID,
     CASE 
         WHEN con.signedStatus = 'COMP-Done' THEN N'เรียบร้อย' 
@@ -487,6 +491,35 @@ DROP TABLE #PAYMENT_TEMP;
             string ResultDescription = "";
             try
             {
+                CancelLOS cancelLOS = new CancelLOS();
+                cancelLOS.refCode = _FormConfirmModel.ApplicationCode;
+
+
+
+
+
+                using (HttpClient client = new HttpClient())
+                {
+                    string jsonBody = JsonConvert.SerializeObject(cancelLOS);
+
+                    client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
+
+                    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                    HttpResponseMessage responseDevice = await client.PostAsync(C100 + "/v2/SgFinance/CancelContractToLMS", content);
+                    int DeviceStatusCode = (int)responseDevice.StatusCode;
+
+                    Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+
+                    if (!responseDevice.IsSuccessStatusCode)
+                    {
+                        var ResponseContent = await responseDevice.Content.ReadAsStringAsync();
+                        ModelResult modelResult = new ModelResult();
+                        modelResult = JsonConvert.DeserializeObject<ModelResult>(ResponseContent);
+
+                        ResultDescription = modelResult.message;
+                        return ResultDescription;
+                    }
+                }
 
 
                 // Define the start and end times for the period (8:00 AM - 10:00 PM)
@@ -607,6 +640,36 @@ DROP TABLE #PAYMENT_TEMP;
             string ResultDescription = "";
             try
             {
+                CancelLOS cancelLOS = new CancelLOS();
+                cancelLOS.refCode = _FormConfirmModel.ApplicationCode;
+
+
+
+                //API Calcel
+                //Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody));
+
+                using (HttpClient client = new HttpClient())
+                {
+                    string jsonBody = JsonConvert.SerializeObject(cancelLOS);
+
+                    client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
+
+                    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                    HttpResponseMessage responseDevice = await client.PostAsync(C100 + "/v2/SgFinance/CancelContractToLMS", content);
+                    int DeviceStatusCode = (int)responseDevice.StatusCode;
+
+                    Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+
+                    if (!responseDevice.IsSuccessStatusCode)
+                    {
+                        var ResponseContent = await responseDevice.Content.ReadAsStringAsync();
+                        ModelResult modelResult = new ModelResult();
+                        modelResult = JsonConvert.DeserializeObject<ModelResult>(ResponseContent);
+
+                        ResultDescription = modelResult.message;
+                        return ResultDescription;
+                    }
+                }
 
 
                 // Define the start and end times for the period (8:00 AM - 10:00 PM)
@@ -662,7 +725,13 @@ DROP TABLE #PAYMENT_TEMP;
                     {
                         ResultDescription += _GetApplicationRespone.AccountNo + " " + dt.Rows[0]["ResultDescription"].ToString();
                     }
+                    else
+                    {
+                        //ยกเลิก LMS Call API
+                        
+                    }
                 }
+
                 sqlCommand.Parameters.Clear();
 
                 if (ResultDescription == "")
@@ -1018,7 +1087,7 @@ DROP TABLE #PAYMENT_TEMP;
                         client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
 
                         var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                        HttpResponseMessage responseDevice = await client.PostAsync(C100 + "/los/v2/SgFinance/C100_Status", content);
+                        HttpResponseMessage responseDevice = await client.PostAsync(C100 + "/v2/SgFinance/C100_Status", content);
                         int DeviceStatusCode = (int)responseDevice.StatusCode;
 
                         Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
@@ -1666,10 +1735,39 @@ DROP TABLE #PAYMENT_TEMP;
 
             try
             {
-                var jsonstring = JsonConvert.SerializeObject(_changeImei);
+                ChangeIMEI changeIMEI = new ChangeIMEI();
+                changeIMEI.accountNo = _changeImei.accNo;
+                changeIMEI.originalSerialNo = _changeImei.oldImei;
+                changeIMEI.newSerialNo = _changeImei.newImei;
+
+                //using (HttpClient client = new HttpClient())
+                //{
+                //    string jsonBody = JsonConvert.SerializeObject(changeIMEI);
+
+                //    client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
+
+                //    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                //    HttpResponseMessage responseDevice = client.Send(C100 + "/v2/SgFinance/CancelContractToLMS", content);
+                //    int DeviceStatusCode = (int)responseDevice.StatusCode;
+
+                //    Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+
+                //    if (!responseDevice.IsSuccessStatusCode)
+                //    {
+                //        var ResponseContent = await responseDevice.Content.ReadAsStringAsync();
+                //        ModelResult modelResult = new ModelResult();
+                //        modelResult = JsonConvert.DeserializeObject<ModelResult>(ResponseContent);
+
+                //        ResultDescription = modelResult.message;
+                //        return ResultDescription;
+                //    }
+                //}
+
+                var jsonstring = JsonConvert.SerializeObject(changeIMEI);
                 var client = new HttpClient();
-                string apiUrl = "https://sg-posservice.singerthai.co.th:10082/v1/LOS/ChangeIMEI";
+                string apiUrl = C100 + "/v2/SgFinance/ChangeImei";
                 var content = new StringContent(jsonstring, null, "application/json");
+                client.DefaultRequestHeaders.Add("apikey", C100Apikey);
                 HttpResponseMessage response = client.PostAsync(apiUrl, content).Result;
                 if (response.IsSuccessStatusCode)
                 {
