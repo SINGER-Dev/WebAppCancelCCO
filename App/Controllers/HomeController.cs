@@ -491,35 +491,36 @@ DROP TABLE #PAYMENT_TEMP;
             string ResultDescription = "";
             try
             {
-                CancelLOS cancelLOS = new CancelLOS();
-                cancelLOS.refCode = _FormConfirmModel.ApplicationCode;
+                //CancelLOS cancelLOS = new CancelLOS();
+                //cancelLOS.refCode = _FormConfirmModel.ApplicationCode;
+                //cancelLOS.userName = HttpContext.Session.GetString("EMP_CODE");
 
 
 
 
 
-                using (HttpClient client = new HttpClient())
-                {
-                    string jsonBody = JsonConvert.SerializeObject(cancelLOS);
+                //using (HttpClient client = new HttpClient())
+                //{
+                //    string jsonBody = JsonConvert.SerializeObject(cancelLOS);
 
-                    client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
+                //    client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
 
-                    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                    HttpResponseMessage responseDevice = await client.PostAsync(C100 + "/v2/SgFinance/CancelContractToLMS", content);
-                    int DeviceStatusCode = (int)responseDevice.StatusCode;
+                //    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                //    HttpResponseMessage responseDevice = await client.PostAsync(C100 + "/v2/SgFinance/CancelContractToLMS", content);
+                //    int DeviceStatusCode = (int)responseDevice.StatusCode;
 
-                    Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+                //    Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
 
-                    if (!responseDevice.IsSuccessStatusCode)
-                    {
-                        var ResponseContent = await responseDevice.Content.ReadAsStringAsync();
-                        ModelResult modelResult = new ModelResult();
-                        modelResult = JsonConvert.DeserializeObject<ModelResult>(ResponseContent);
+                //    if (!responseDevice.IsSuccessStatusCode)
+                //    {
+                //        var ResponseContent = await responseDevice.Content.ReadAsStringAsync();
+                //        ModelResult modelResult = new ModelResult();
+                //        modelResult = JsonConvert.DeserializeObject<ModelResult>(ResponseContent);
 
-                        ResultDescription = modelResult.message;
-                        return ResultDescription;
-                    }
-                }
+                //        ResultDescription = modelResult.message;
+                //        return ResultDescription;
+                //    }
+                //}
 
 
                 // Define the start and end times for the period (8:00 AM - 10:00 PM)
@@ -642,34 +643,37 @@ DROP TABLE #PAYMENT_TEMP;
             {
                 CancelLOS cancelLOS = new CancelLOS();
                 cancelLOS.refCode = _FormConfirmModel.ApplicationCode;
+                cancelLOS.userName = HttpContext.Session.GetString("EMP_CODE");
 
 
 
                 //API Calcel
                 //Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody));
 
-                using (HttpClient client = new HttpClient())
-                {
-                    string jsonBody = JsonConvert.SerializeObject(cancelLOS);
+                //using (HttpClient client = new HttpClient())
+                //{
+                //    string jsonBody = JsonConvert.SerializeObject(cancelLOS);
 
-                    client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
+                //    client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
 
-                    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                    HttpResponseMessage responseDevice = await client.PostAsync(C100 + "/v2/SgFinance/CancelContractToLMS", content);
-                    int DeviceStatusCode = (int)responseDevice.StatusCode;
+                //    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                //    HttpResponseMessage responseDevice = await client.PostAsync(C100 + "/v2/SgFinance/CancelContractToLMS", content);
+                //    int DeviceStatusCode = (int)responseDevice.StatusCode;
 
-                    Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+                //    Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
 
-                    if (!responseDevice.IsSuccessStatusCode)
-                    {
-                        var ResponseContent = await responseDevice.Content.ReadAsStringAsync();
-                        ModelResult modelResult = new ModelResult();
-                        modelResult = JsonConvert.DeserializeObject<ModelResult>(ResponseContent);
 
-                        ResultDescription = modelResult.message;
-                        return ResultDescription;
-                    }
-                }
+
+                //    if (!responseDevice.IsSuccessStatusCode)
+                //    {
+                //        var ResponseContent = await responseDevice.Content.ReadAsStringAsync();
+                //        ModelResult modelResult = new ModelResult();
+                //        modelResult = JsonConvert.DeserializeObject<ModelResult>(ResponseContent);
+
+                //        ResultDescription = modelResult.message;
+                //        return ResultDescription;
+                //    }
+                //}
 
 
                 // Define the start and end times for the period (8:00 AM - 10:00 PM)
@@ -694,18 +698,63 @@ DROP TABLE #PAYMENT_TEMP;
                 GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
 
                 //Cancel Application
-                //CCOWebServiceModel _CCOWebService = new CCOWebServiceModel();
-                //_CCOWebService.id = _GetApplicationRespone.ApplicationID;
-                //MessageModel _MessageModel = await CCOWebService(_CCOWebService);
+                CCOWebServiceModel _CCOWebService = new CCOWebServiceModel();
+                _CCOWebService.id = _GetApplicationRespone.ApplicationID;
+                MessageModel _MessageModel = await CCOWebService(_CCOWebService);
 
                 //Cancel EZ Tax
                 //GetTokenEZTaxRp _GetTokenEZTaxRp = await GetTokenEZTax();
 
                 //Cancel econtract
-
+                SqlDataAdapter dtAdapter = new SqlDataAdapter();
 
                 SqlCommand sqlCommand;
-                string strSQL = DATABASEK2 + ".[CancelApplication_CLOSED]";
+                string strSQL = DATABASEK2 + ".[LoanTypeCate]";
+                sqlCommand = new SqlCommand(strSQL, connection);
+                sqlCommand.CommandTimeout = 180;
+                sqlCommand.CommandType = CommandType.StoredProcedure;
+                sqlCommand.Parameters.AddWithValue("ApplicationCode", _GetApplicationRespone.ApplicationCode);
+                dtAdapter.SelectCommand = sqlCommand;
+                DataTable dt = new DataTable();
+                dtAdapter.Fill(dt);
+                connection.Close();
+                sqlCommand.Parameters.Clear();
+                if(dt.Rows.Count > 0)
+                {
+                    if (dt.Rows[0]["loanTypeCate"].ToString().ToUpper() == "LOCKPHONE" && dt.Rows[0]["AccountNo"].ToString() != "")
+                    {
+                        //API Calcel
+                        //Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody));
+
+                        using (HttpClient client = new HttpClient())
+                        {
+                            string jsonBody = JsonConvert.SerializeObject(cancelLOS);
+
+                            client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
+
+                            var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                            HttpResponseMessage responseDevice = await client.PostAsync(C100 + "/v2/SgFinance/CancelContractToLMS", content);
+                            int DeviceStatusCode = (int)responseDevice.StatusCode;
+
+                            Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
+
+
+
+                            if (!responseDevice.IsSuccessStatusCode)
+                            {
+                                var ResponseContent = await responseDevice.Content.ReadAsStringAsync();
+                                ModelResult modelResult = new ModelResult();
+                                modelResult = JsonConvert.DeserializeObject<ModelResult>(ResponseContent);
+
+                                ResultDescription = modelResult.message;
+                                return ResultDescription;
+                            }
+                        }
+                    }
+                }
+
+
+                strSQL = DATABASEK2 + ".[CancelApplication_CLOSED]";
                 sqlCommand = new SqlCommand(strSQL, connection);
                 sqlCommand.CommandTimeout = 180;
                 sqlCommand.CommandType = CommandType.StoredProcedure;
@@ -713,10 +762,9 @@ DROP TABLE #PAYMENT_TEMP;
                 sqlCommand.Parameters.AddWithValue("Remark", _FormConfirmModel.Remark + "" + _FormConfirmModel.Other);
                 sqlCommand.Parameters.AddWithValue("CANCEL_USER", HttpContext.Session.GetString("EMP_CODE"));
 
-                SqlDataAdapter dtAdapter = new SqlDataAdapter();
 
                 dtAdapter.SelectCommand = sqlCommand;
-                DataTable dt = new DataTable();
+                dt = new DataTable();
                 dtAdapter.Fill(dt);
                 connection.Close();
                 if (dt.Rows.Count > 0)

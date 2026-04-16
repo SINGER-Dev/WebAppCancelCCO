@@ -3,6 +3,7 @@
     public class CancelLOS
     {
         public string refCode { get; set; }
+        public string? userName { get; set; }
     }
 
     public class ChangeIMEI
