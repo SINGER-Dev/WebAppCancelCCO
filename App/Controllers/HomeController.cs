@@ -491,6 +491,29 @@ DROP TABLE #PAYMENT_TEMP;
             string ResultDescription = "";
             try
             {
+                DataTable dt1 = new DataTable();
+                SqlConnection connection1 = new SqlConnection();
+                connection1.ConnectionString = strConnString;
+                connection1.Open();
+                //Write Log
+                SqlCommand sqlCommand1;
+                string strSQL = DATABASEK2 + ".[CCO_CANCEL]";
+                sqlCommand1 = new SqlCommand(strSQL, connection1);
+                sqlCommand1.CommandTimeout = 180;
+                sqlCommand1.CommandType = CommandType.StoredProcedure;
+                sqlCommand1.Parameters.AddWithValue("ApplicationCode", _FormConfirmModel.ApplicationCode);
+                sqlCommand1.Parameters.AddWithValue("Remark", _FormConfirmModel.Remark);
+                sqlCommand1.Parameters.AddWithValue("ExceptIMEI", _FormConfirmModel.ExceptIMEI);
+                sqlCommand1.Parameters.AddWithValue("ExceptCus", _FormConfirmModel.ExceptCus);
+                sqlCommand1.Parameters.AddWithValue("Other", _FormConfirmModel.Other);
+                sqlCommand1.Parameters.AddWithValue("CreateBy", HttpContext.Session.GetString("EMP_CODE"));
+                sqlCommand1.Parameters.AddWithValue("Source", "Cancel");
+
+                SqlDataAdapter dtAdapter1 = new SqlDataAdapter();
+                dtAdapter1.SelectCommand = sqlCommand1;
+                dt1 = new DataTable();
+                dtAdapter1.Fill(dt1);
+                connection1.Close();
                 //CancelLOS cancelLOS = new CancelLOS();
                 //cancelLOS.refCode = _FormConfirmModel.ApplicationCode;
                 //cancelLOS.userName = HttpContext.Session.GetString("EMP_CODE");
@@ -641,6 +664,30 @@ DROP TABLE #PAYMENT_TEMP;
             string ResultDescription = "";
             try
             {
+                DataTable dt = new DataTable();
+                SqlConnection connection = new SqlConnection();
+                connection.ConnectionString = strConnString;
+                connection.Open();
+                //Write Log
+                SqlCommand sqlCommand;
+                string strSQL = DATABASEK2 + ".[CCO_CANCEL]";
+                sqlCommand = new SqlCommand(strSQL, connection);
+                sqlCommand.CommandTimeout = 180;
+                sqlCommand.CommandType = CommandType.StoredProcedure;
+                sqlCommand.Parameters.AddWithValue("ApplicationCode", _FormConfirmModel.ApplicationCode);
+                sqlCommand.Parameters.AddWithValue("Remark", _FormConfirmModel.Remark);
+                sqlCommand.Parameters.AddWithValue("ExceptIMEI", _FormConfirmModel.ExceptIMEI);
+                sqlCommand.Parameters.AddWithValue("ExceptCus", _FormConfirmModel.ExceptCus);
+                sqlCommand.Parameters.AddWithValue("Other", _FormConfirmModel.Other);
+                sqlCommand.Parameters.AddWithValue("CreateBy", HttpContext.Session.GetString("EMP_CODE"));
+                sqlCommand.Parameters.AddWithValue("Source", "CancelCLOSED");
+
+                SqlDataAdapter dtAdapter = new SqlDataAdapter();
+                dtAdapter.SelectCommand = sqlCommand;
+                dt = new DataTable();
+                dtAdapter.Fill(dt);
+                connection.Close();
+
                 CancelLOS cancelLOS = new CancelLOS();
                 cancelLOS.refCode = _FormConfirmModel.ApplicationCode;
                 cancelLOS.userName = HttpContext.Session.GetString("EMP_CODE");
@@ -689,9 +736,7 @@ DROP TABLE #PAYMENT_TEMP;
 
                 //if (isWithinPeriod)
                 //{
-                SqlConnection connection = new SqlConnection();
-                connection.ConnectionString = strConnString;
-                connection.Open();
+
 
                 GetApplication _GetApplication = new GetApplication();
                 _GetApplication.ApplicationCode = _FormConfirmModel.ApplicationCode;
@@ -706,16 +751,16 @@ DROP TABLE #PAYMENT_TEMP;
                 //GetTokenEZTaxRp _GetTokenEZTaxRp = await GetTokenEZTax();
 
                 //Cancel econtract
-                SqlDataAdapter dtAdapter = new SqlDataAdapter();
+                //SqlDataAdapter dtAdapter = new SqlDataAdapter();
 
-                SqlCommand sqlCommand;
-                string strSQL = DATABASEK2 + ".[LoanTypeCate]";
+                //SqlCommand sqlCommand;
+                strSQL = DATABASEK2 + ".[LoanTypeCate]";
                 sqlCommand = new SqlCommand(strSQL, connection);
                 sqlCommand.CommandTimeout = 180;
                 sqlCommand.CommandType = CommandType.StoredProcedure;
                 sqlCommand.Parameters.AddWithValue("ApplicationCode", _GetApplicationRespone.ApplicationCode);
                 dtAdapter.SelectCommand = sqlCommand;
-                DataTable dt = new DataTable();
+                //DataTable dt = new DataTable();
                 dtAdapter.Fill(dt);
                 connection.Close();
                 sqlCommand.Parameters.Clear();
