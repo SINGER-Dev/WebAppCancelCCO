@@ -19,20 +19,15 @@ namespace App.Controllers
         private const string FullName = "";
         private const string EMP_CODE = "";
         private const string RoleDescription = "";
-        public LoginController(ILogger<HomeController> logger)
+        public LoginController(ILogger<HomeController> logger, IConfiguration configuration)
         {
-            var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-            var builder = new ConfigurationBuilder()
-                        .SetBasePath(Directory.GetCurrentDirectory())
-                        .AddJsonFile($"appsettings.{env}.json", true, false)
-                        .AddJsonFile($"appsettings.json", true, false)
-                        .AddEnvironmentVariables()
-                        .Build();
+            // เดิมเปิดไฟล์ appsettings จากดิสก์แล้วแปลง JSON ใหม่ทุก request
+            // ตอนนี้ใช้ค่าที่แอปอ่านไว้ตั้งแต่ตอนเปิดระบบแทน
             _logger = logger;
-            strConnString = builder.GetConnectionString("strConnString");
-            DATABASEK2 = builder.GetConnectionString("DATABASEK2");
-            strConnString3 = builder.GetConnectionString("strConnString3");
-            ApplicationID = builder.GetConnectionString("ApplicationID"); 
+            strConnString = configuration.GetConnectionString("strConnString");
+            DATABASEK2 = configuration.GetConnectionString("DATABASEK2");
+            strConnString3 = configuration.GetConnectionString("strConnString3");
+            ApplicationID = configuration.GetConnectionString("ApplicationID"); 
         }
 
         public IActionResult Index()

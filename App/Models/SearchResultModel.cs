@@ -1,0 +1,80 @@
+﻿namespace App.Models
+{
+    /// <summary>
+    /// รูปแบบข้อมูลที่หน้าค้นหาส่งกลับให้เบราว์เซอร์ (JSON)
+    /// เดิม server เรนเดอร์ HTML ทั้งตารางแล้วส่งมา ทำให้ payload ใหญ่หลายร้อย KB ต่อหน้า
+    /// </summary>
+    public class SearchResultDto
+    {
+        public bool Success { get; set; } = true;
+        public string? Message { get; set; }
+        public List<SearchRowDto> Data { get; set; } = new();
+        public SearchMetaDto Meta { get; set; } = new();
+    }
+
+    public class SearchMetaDto
+    {
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int Total { get; set; }
+        public int TotalPages { get; set; }
+        public int[] PageSizes { get; set; } = Array.Empty<int>();
+
+        /// <summary>เวลาที่อ่านข้อมูลชุดนี้จากฐานข้อมูลจริง — แสดงบนหน้าจอให้รู้ว่าข้อมูลสดแค่ไหน</summary>
+        public string GeneratedAt { get; set; } = "";
+
+        /// <summary>อายุของข้อมูล (วินาที) — 0 = เพิ่งอ่านสด</summary>
+        public int AgeSeconds { get; set; }
+
+        /// <summary>คอลัมน์ที่กำลังเรียง และทิศทาง — ให้หน้าจอวาดลูกศรได้ถูก</summary>
+        public string Sort { get; set; } = "date";
+        public string Dir { get; set; } = "desc";
+    }
+
+    public class SearchRowDto
+    {
+        public string? ApplicationCode { get; set; }
+        public string? RefCode { get; set; }
+        public string? ApplicationDate { get; set; }
+
+        public string? AccountNo { get; set; }
+        public string? CustomerId { get; set; }
+        public string? CustomerName { get; set; }
+        public string? CustomerMobile { get; set; }
+
+        public string? SaleDepCode { get; set; }
+        public string? SaleDepName { get; set; }
+        public string? SaleName { get; set; }
+        public string? SaleTelephoneNo { get; set; }
+
+        public string? ProductModelName { get; set; }
+        public string? ProductSerialNo { get; set; }
+
+        public string? ApplicationStatusId { get; set; }
+        public string? LineStatus { get; set; }
+        public string? SignedStatus { get; set; }
+        public string? StatusReceived { get; set; }
+        public string? NumRegis { get; set; }
+        public string? NumDoc { get; set; }
+        public string? NewNum { get; set; }
+        public string? PayNum { get; set; }
+
+        public string? LoanTypeCate { get; set; }
+        public string? OuCode { get; set; }
+
+        /// <summary>
+        /// เงื่อนไขว่าปุ่มซ่อมแต่ละตัวจะแสดงหรือไม่ — คำนวณที่ server เพื่อให้กติกาอยู่ที่เดียว
+        /// (เดิมเขียนเป็น if ซ้อนกันอยู่ในไฟล์ Razor ทำให้แก้ยากและตรวจสอบไม่ได้)
+        /// </summary>
+        public bool CanPushStatusClosed { get; set; }
+        public bool CanGenEsignature { get; set; }
+        public bool CanRegisImei { get; set; }
+        public bool CanRepushNewSale { get; set; }
+
+        /// <summary>ใบนี้มีสัญญาซ้ำ จึงกดซ่อมได้</summary>
+        public bool CanFixDuplicateContract { get; set; }
+
+        /// <summary>เหตุผลที่ยังกดลงทะเบียนเครื่องไม่ได้ (null = กดได้ หรือทำไปแล้ว) — ใช้อธิบายบนหน้าจอ</summary>
+        public string? RegisBlockedReason { get; set; }
+    }
+}

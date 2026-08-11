@@ -37,7 +37,9 @@ namespace App.Models
         public string? Ref4 { get; set; }
         public string? appIns { get; set; }
         public string? Status { get; set; }
-        
+
+        /// <summary>จำนวนรายการทั้งหมดที่ตรงเงื่อนไขค้นหา (ไม่ใช่เฉพาะหน้านี้) — ใช้สร้างแถบแบ่งหน้า</summary>
+        public int TotalRows { get; set; }
     }
 
     public class LendingInfoRq

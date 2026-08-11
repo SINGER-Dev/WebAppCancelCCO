@@ -1,134 +1,129 @@
 ﻿@{
+    var actorName = Context.Session.GetString("FullName") ?? Context.Session.GetString("EMP_CODE") ?? "";
+}
+@{
     ViewData["Title"] = " ระบบตรวจสอบใบคำขอ SG Finance+ ";
 }
 
-
 @using (Html.BeginForm("Search", "Home", FormMethod.Post, new { id = "searchForm" }))
-{   
-     <div class="mb-2 row">
-
-        <div class="col-sm-3">
-
-            <div data-mdb-input-init class="form-outline mb-3">
-                <input type="text" id="ApplicationCode" name="ApplicationCode" class="form-control form-control-lg"
-                       placeholder="เลขที่ใบคำขอ" />
-                <label class="form-label" for="form3Example3">เลขที่ใบคำขอ</label>
-            </div>
-
+{
+    <div class="filter-card mb-3">
+        <div class="filter-card-head">
+            <span class="filter-card-title">ค้นหาใบคำขอ</span>
+            <span class="filter-card-hint">ไม่ระบุวันที่ = ค้นหาเฉพาะวันนี้ · ระบุเลขที่ใบคำขอ/สัญญา/Serial/เลขบัตร = ค้นหาได้ทุกช่วงเวลา</span>
         </div>
 
-
-        <div class="col-sm-3">
-
-            <div data-mdb-input-init class="form-outline mb-3">
-                <input type="text" id="AccountNo" name="AccountNo" class="form-control form-control-lg"
-                       placeholder="เลขที่สัญญา" />
-                <label class="form-label" for="form3Example3">เลขที่สัญญา</label>
+        <div class="filter-grid">
+            <div>
+                <label class="form-label" for="ApplicationCode">เลขที่ใบคำขอ</label>
+                <input type="text" id="ApplicationCode" name="ApplicationCode" class="form-control" autocomplete="off" />
+            </div>
+            <div>
+                <label class="form-label" for="AccountNo">เลขที่สัญญา</label>
+                <input type="text" id="AccountNo" name="AccountNo" class="form-control" autocomplete="off" />
+            </div>
+            <div>
+                <label class="form-label" for="ProductSerialNo">Serial / IMEI</label>
+                <input type="text" id="ProductSerialNo" name="ProductSerialNo" class="form-control" autocomplete="off" />
+            </div>
+            <div>
+                <label class="form-label" for="CustomerName">ชื่อลูกค้า</label>
+                <input type="text" id="CustomerName" name="CustomerName" class="form-control" autocomplete="off" />
+            </div>
+            <div>
+                <label class="form-label" for="CustomerID">เลขบัตรประชาชน</label>
+                <input type="text" id="CustomerID" name="CustomerID" class="form-control" autocomplete="off" />
             </div>
 
-        </div>
-
-        <div class="col-sm-3">
-
-            <div data-mdb-input-init class="form-outline mb-3">
-                <input type="text" id="ProductSerialNo" name="ProductSerialNo" class="form-control form-control-lg"
-                       placeholder="Serial / IMEI" />
-                <label class="form-label" for="form3Example3">Serial / IMEI</label>
-            </div>
-
-        </div>
-
-        <div class="col-sm-3">
-            <div data-mdb-input-init class="form-outline mb-3">
-                <input type="text" id="CustomerName" name="CustomerName" class="form-control form-control-lg"
-                       placeholder="ชื่อลูกค้า" />
-                <label class="form-label" for="form3Example3">ชื่อลูกค้า</label>
-            </div>
-        </div>
-
-    </div>
-
-    <div class="mb-2 row">
-
-       
-        <div class="col-sm-3">
-            <div data-mdb-input-init class="form-outline mb-3">
-                <input type="text" id="CustomerID" name="CustomerID" class="form-control form-control-lg"
-                       placeholder="CustomerID" />
-                <label class="form-label" for="form3Example3">CustomerID</label>
-            </div>
-        </div>
-
-        <div class="col-sm-3">
-            <div class="form-floating">
-                <select class="form-select" name="status" id="status" aria-label="สถานะ">
-                    <option value="">เลือกสถานะทั้งหมด</option>
+            <div>
+                <label class="form-label" for="status">สถานะ</label>
+                <select class="form-select" name="status" id="status">
+                    <option value="">ทั้งหมด</option>
                     <option value="CLOSING">CLOSING</option>
                     <option value="CLOSED">CLOSED</option>
                     <option value="CANCELLED">CANCELLED</option>
                 </select>
             </div>
-        </div>
-
-
-        <div class="col-sm-3">
-            <div class="form-floating">
-                <select class="form-select" name="StatusRegis" id="StatusRegis" aria-label="สถานะลงทะเบียน">
-                    <option value="">เลือกสถานะลงทะเบียนทั้งหมด</option>
+            <div>
+                <label class="form-label" for="StatusRegis">สถานะลงทะเบียน</label>
+                <select class="form-select" name="StatusRegis" id="StatusRegis">
+                    <option value="">ทั้งหมด</option>
                     <option value="0">รอลงทะเบียน</option>
                     <option value="1">ลงทะเบียนเรียบร้อย</option>
                 </select>
             </div>
-        </div>
-
-        <div class="col-sm-3">
-            <div class="form-floating">
-                <select class="form-select" name="loanTypeCate" id="loanTypeCate" aria-label="ประเภทรายการ">
-                    <option value="">เลือกประเภทรายการทั้งหมด</option>
+            <div>
+                <label class="form-label" for="loanTypeCate">ประเภทรายการ</label>
+                <select class="form-select" name="loanTypeCate" id="loanTypeCate">
+                    <option value="">ทั้งหมด</option>
                     <option value="LOCKPHONE" selected>LOCKPHONE</option>
                     <option value="HP">HP</option>
                 </select>
             </div>
-        </div>
-
-    </div>
-
-    <div class="mb-2 row">
-
-        <div class="col-sm-3">
-
-            <div data-mdb-input-init class="form-outline mb-3">
-                <input type="text" id="startdate" name="startdate" class="date form-control form-control-lg active"
-                       placeholder="วันที่เริ่มต้น" autocomplete="off" />
-                <label class="form-label" for="form3Example3">วันที่เริ่มต้น</label>
+            <div>
+                <label class="form-label" for="startdate">วันที่เริ่มต้น</label>
+                <input type="text" id="startdate" name="startdate" class="date form-control" autocomplete="off" placeholder="ปปปป/ดด/วว" />
             </div>
-
-        </div>
-
-        <div class="col-sm-3">
-
-            <div data-mdb-input-init class="form-outline mb-3">
-                <input type="text" id="enddate" name="enddate" class="date form-control form-control-lg active"
-                       placeholder="วันที่สิ้นสุด" autocomplete="off" />
-                <label class="form-label" for="form3Example3">วันที่สิ้นสุด</label>
+            <div>
+                <label class="form-label" for="enddate">วันที่สิ้นสุด</label>
+                <input type="text" id="enddate" name="enddate" class="date form-control" autocomplete="off" placeholder="ปปปป/ดด/วว" />
             </div>
-
         </div>
 
-    </div>
- 
-
-    <div class="mb-3 row">
-        <div class="col-sm-10">
-            <button type="submit" class="btn btn-primary mb-3" id="BtnsearchResults">ค้นหา</button>
+        <div class="filter-actions">
+            <button type="submit" class="btn btn-primary" id="BtnsearchResults">
+                <i class="fa-solid fa-magnifying-glass"></i> ค้นหา
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="BtnClearFilters">ล้างเงื่อนไข</button>
         </div>
     </div>
 }
 
-<div class="loaddong">
-    <div class="spinner-border" role="status">
-        <span class="visually-hidden">Loading...</span>
+<div class="results-wrap" data-actor="@actorName">
+    <div class="loaddong">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">กำลังโหลด</span>
+        </div>
     </div>
-</div>
-<div id="searchResults"></div>
 
+    <div id="searchAlert"></div>
+
+    <div id="searchToolbar" class="results-toolbar" hidden>
+        <div class="results-count" id="resultsCount"></div>
+        <div class="results-tools">
+            <label class="mb-0 text-nowrap" for="pageSizeSelect">แสดงหน้าละ</label>
+            <select id="pageSizeSelect" class="form-select form-select-sm" style="width:auto"></select>
+            <button type="button" id="btnRefreshNow" class="btn btn-outline-primary btn-sm text-nowrap" title="อ่านข้อมูลสดจากฐานข้อมูลทันที">
+                <i class="fa-solid fa-rotate"></i> รีเฟรช
+            </button>
+            <div class="form-check form-switch mb-0 text-nowrap">
+                <input class="form-check-input" type="checkbox" id="autoRefresh">
+                <label class="form-check-label" for="autoRefresh">อัปเดตอัตโนมัติ</label>
+            </div>
+            <button type="button" id="btnExportSearch" class="btn btn-success btn-sm text-nowrap">
+                <i class="fa-solid fa-file-excel"></i> ดาวน์โหลดทั้งหมด
+            </button>
+        </div>
+    </div>
+
+    <div id="searchTableWrap" class="table-responsive" hidden>
+        <table id="example" class="display dataTable table-secondary" style="width:100%">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th class="sortable" data-sort="date">วันที่สร้างใบคำขอ</th>
+                    <th class="sortable" data-sort="account">เอกสาร</th>
+                    <th class="sortable" data-sort="branch">สาขา</th>
+                    <th class="sortable" data-sort="product">ชื่อสินค้าและหมายเลขสินค้า</th>
+                    <th class="sortable" data-sort="status">สถานะ</th>
+                    @* สถานะสัญญา / ตรวจสอบ เรียงไม่ได้ เพราะดึงมาทีหลังเฉพาะแถวของหน้านั้น *@
+                    <th>สถานะสัญญา</th>
+                    <th>ตรวจสอบ</th>
+                </tr>
+            </thead>
+            <tbody id="searchTableBody"></tbody>
+        </table>
+    </div>
+
+    <nav id="searchPager" aria-label="แบ่งหน้า" hidden></nav>
+</div>

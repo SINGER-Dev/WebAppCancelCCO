@@ -10,11 +10,11 @@
     <link rel="stylesheet" href="https://cdn.datatables.net/select/1.3.1/css/select.dataTables.min.css" />
     <link rel="stylesheet" href="https://cdn.datatables.net/buttons/1.6.5/css/buttons.dataTables.min.css" />
      *@
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css  />
-    <link rel="stylesheet" href="https://cdn.datatables.net/2.1.4/css/dataTables.bootstrap5.css  />
-    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/3.1.1/css/buttons.bootstrap5.css  />
+    @* 3 บรรทัดเดิมตรงนี้ปิดเครื่องหมายคำพูดไม่ครบ (href="...css  />) เบราว์เซอร์จึงกลืน markup ต่อท้าย
+       และไม่ได้โหลด CSS จริงสักไฟล์ — ลบทิ้งเพื่อไม่ให้ HTML เพี้ยน (bootstrap ตัวที่ใช้งานจริงอยู่ด้านล่าง)
+       ส่วน dataTables.bootstrap5.css / buttons.bootstrap5.css ไม่เคยถูกโหลดมาก่อน จึงยังไม่ใส่กลับในเฟสนี้
+       เพื่อไม่ให้หน้าตาตารางเปลี่ยน *@
 
-    
     <link href="
 https://cdn.jsdelivr.net/npm/sweetalert2@11.11.0/dist/sweetalert2.min.css
 " rel="stylesheet">
@@ -45,7 +45,9 @@ https://cdn.jsdelivr.net/npm/sweetalert2@11.11.0/dist/sweetalert2.min.css
           rel="stylesheet" />
 
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap"
+    @* Roboto ไม่มีตัวอักษรไทย ข้อความไทยจึงตกไปใช้ฟอนต์ระบบ ทำให้ไทยกับตัวเลข/อังกฤษดูคนละชุด
+       เพิ่ม Noto Sans Thai เข้ามาเพื่อให้ทั้งหน้าใช้ตระกูลเดียวกัน (ถ้าโหลดไม่ได้ก็ตกกลับไปฟอนต์ระบบเหมือนเดิม) *@
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap"
           rel="stylesheet" />
 
     <style>
@@ -85,6 +87,240 @@ https://cdn.jsdelivr.net/npm/sweetalert2@11.11.0/dist/sweetalert2.min.css
             left: 0;
             height: 100%;
             padding: 0.5rem .75rem;
+        }
+
+        /* ---------- หน้าค้นหาใบคำขอ ---------- */
+
+        body, .form-control, .form-select, .btn, table.dataTable, .navbar {
+            font-family: 'Noto Sans Thai', Roboto, -apple-system, 'Segoe UI', sans-serif;
+        }
+
+        /* กล่องเงื่อนไขค้นหา */
+        .filter-card {
+            background: #fff;
+            border: 1px solid #e3e6ea;
+            border-radius: .5rem;
+            padding: 1rem 1.25rem 1.25rem;
+        }
+
+        .filter-card-head {
+            display: flex;
+            align-items: baseline;
+            gap: .75rem;
+            flex-wrap: wrap;
+            margin-bottom: .85rem;
+            padding-bottom: .6rem;
+            border-bottom: 1px solid #eef0f3;
+        }
+
+        .filter-card-title { font-weight: 600; font-size: 1rem; }
+        .filter-card-hint { font-size: .78rem; color: #6b7280; }
+
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: .75rem 1rem;
+        }
+
+        @@media (max-width: 1200px) { .filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        @@media (max-width: 768px)  { .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @@media (max-width: 480px)  { .filter-grid { grid-template-columns: 1fr; } }
+
+        .filter-grid .form-label {
+            font-size: .78rem;
+            color: #4b5563;
+            margin-bottom: .2rem;
+        }
+
+        .filter-grid .form-control, .filter-grid .form-select { font-size: .9rem; }
+
+        .filter-actions {
+            display: flex;
+            gap: .5rem;
+            margin-top: 1rem;
+        }
+
+        /* แถบสรุปผล + เครื่องมือ */
+        .results-wrap { position: relative; min-height: 4rem; }
+
+        .results-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: .75rem;
+            margin: 1rem 0 .6rem;
+        }
+
+        .results-tools { display: flex; align-items: center; gap: .5rem; }
+        .results-count { font-size: .9rem; }
+        .data-fresh { color: #15803d; font-size: .8rem; margin-left: .35rem; }
+        .data-stale { color: #b45309; font-size: .8rem; margin-left: .35rem; }
+
+        /* ---------- ใบสรุปรายการ ---------- */
+
+        .slip-popup { border-radius: .5rem; padding: 0; overflow: hidden; }
+        .slip-container { margin: 0; padding: 0; text-align: left; }
+        .slip-actions { padding: 0 1.5rem 1.4rem; margin: 0; justify-content: flex-end; gap: .5rem; }
+        .slip-actions .btn { padding: .5rem 1.4rem; font-size: .95rem; border-radius: .4rem; }
+
+        .slip { font-size: .95rem; color: #1f2733; }
+
+        /* หัวใบ: ชื่อรายการซ้าย ตราประทับผลขวา */
+        .slip-head {
+            display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+            padding: .95rem 1.5rem; border-bottom: 2px solid;
+        }
+        .slip-op { font-weight: 600; font-size: 1.02rem; }
+        .slip-stamp {
+            flex: 0 0 auto; font-size: .82rem; font-weight: 700; letter-spacing: .04em;
+            padding: .2rem .7rem; border-radius: 2rem; border: 1.5px solid; white-space: nowrap;
+        }
+
+        .slip-ask  .slip-head { background: #f3f7fd; border-bottom-color: #c7dbf7; color: #14396e; }
+        .slip-ask  .slip-stamp { color: #1d4ed8; border-color: #93b8ee; background: #fff; }
+        .slip-ok   .slip-head { background: #f1f9f3; border-bottom-color: #b6e0c2; color: #14532d; }
+        .slip-ok   .slip-stamp { color: #15803d; border-color: #86c99b; background: #fff; }
+        .slip-warn .slip-head { background: #fdf7ee; border-bottom-color: #f0d7ae; color: #7c4a10; }
+        .slip-warn .slip-stamp { color: #b45309; border-color: #e3bd83; background: #fff; }
+        .slip-err  .slip-head { background: #fdf3f3; border-bottom-color: #f0c2c2; color: #7f1d1d; }
+        .slip-err  .slip-stamp { color: #b91c1c; border-color: #e79b9b; background: #fff; }
+        .slip-lock .slip-head { background: #f5f6f8; border-bottom-color: #dcdfe4; color: #374151; }
+        .slip-lock .slip-stamp { color: #475569; border-color: #c3c9d1; background: #fff; }
+
+        /* กลางใบ: เลขที่ใบคำขอเป็นพระเอก */
+        .slip-body { padding: 1.5rem 1.5rem 1.3rem; }
+        .slip-docno {
+            font-size: 1.7rem; font-weight: 700; letter-spacing: .02em;
+            font-variant-numeric: tabular-nums; color: #111827; line-height: 1.2;
+        }
+        .slip-docsub { font-size: .9rem; color: #6b7280; margin-top: .3rem; }
+
+        /* เส้นปรุแบบใบสรุป — ตัวคั่นระหว่างข้อมูลเอกสารกับผลลัพธ์ */
+        .slip-cut {
+            margin: 1.15rem 0; border-top: 1px dashed #d7dbe0;
+            position: relative;
+        }
+        .slip-cut::before, .slip-cut::after {
+            content: ''; position: absolute; top: -7px; width: 14px; height: 14px;
+            border-radius: 50%; background: #f4f5f7;
+        }
+        .slip-cut::before { left: -1.5rem; }
+        .slip-cut::after  { right: -1.5rem; }
+
+        .slip-result { font-size: 1.06rem; line-height: 1.6; font-weight: 500; }
+        .slip-next { margin-top: .55rem; font-size: .9rem; line-height: 1.55; color: #6b7280; }
+
+        /* ท้ายใบ */
+        .slip-foot {
+            display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+            padding: .8rem 1.5rem; background: #fafbfc; border-top: 1px solid #eceef1;
+            font-size: .84rem; color: #4b5563; font-variant-numeric: tabular-nums;
+        }
+        .slip-foot span { color: #9ca3af; margin-right: .35rem; }
+
+        .slip-detail { padding: .8rem 1.5rem 1.1rem; border-top: 1px solid #eceef1; }
+        .slip-detail summary { cursor: pointer; font-size: .87rem; color: #2563eb; }
+        .slip-detail pre {
+            margin: .7rem 0 .6rem; padding: .75rem .85rem; max-height: 11rem; overflow: auto;
+            background: #f8fafc; border: 1px solid #e6e9ed; border-radius: .35rem;
+            font-size: .8rem; line-height: 1.5; white-space: pre-wrap; word-break: break-all; color: #374151;
+        }
+
+        .row-fix.is-busy { opacity: .35; pointer-events: none; }
+
+        #searchPager .pagination { margin-bottom: 1rem; }
+        #searchPager .page-link { padding: .25rem .7rem; font-size: .85rem; }
+
+        /* สปินเนอร์คลุมเฉพาะพื้นที่ผลลัพธ์ ไม่ใช่ลอยอยู่เฉย ๆ */
+        .results-wrap .loaddong {
+            position: absolute;
+            inset: 0;
+            background: rgba(255, 255, 255, .7);
+            z-index: 5;
+        }
+
+        .results-wrap .loaddong .spinner-border {
+            position: absolute;
+            top: 6rem;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        /* ตาราง: หัวตารางลอยค้างไว้ตอนเลื่อนดูรายการยาว ๆ */
+        #searchTableWrap { max-height: calc(100vh - 22rem); overflow: auto; }
+
+        table.dataTable thead th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: #e9edf1;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        table.dataTable tbody tr:nth-child(even) > * { background-color: rgba(0, 0, 0, .02); }
+        table.dataTable tbody tr:hover > * { background-color: rgba(255, 127, 80, .09); }
+        table.dataTable td { vertical-align: top; line-height: 1.55; font-variant-numeric: tabular-nums; }
+
+        /* ตารางค้นหาต้องพอดีความกว้างจอ ไม่ต้องเลื่อนซ้ายขวา
+           (สไตล์รวมของระบบตั้ง td { white-space: nowrap } ไว้ ซึ่งทำให้ตารางกว้างเกินจอ
+            จึงปลดเฉพาะตารางนี้ แล้วคงบรรทัดเดียวไว้เฉพาะเซลล์ที่ห้ามตัดคำจริง ๆ) */
+        #searchTableWrap table { table-layout: fixed; width: 100%; }
+        #searchTableWrap td { white-space: normal; word-break: break-word; }
+        #searchTableWrap td.nw { white-space: nowrap; word-break: normal; }
+
+        #searchTableWrap th:nth-child(1) { width: 2.5rem; }
+        #searchTableWrap th:nth-child(2) { width: 12%; }
+        #searchTableWrap th:nth-child(3) { width: 17%; }
+        #searchTableWrap th:nth-child(4) { width: 17%; }
+        #searchTableWrap th:nth-child(5) { width: 16%; }
+        #searchTableWrap th:nth-child(6) { width: 9%; }
+        #searchTableWrap th:nth-child(7) { width: 14%; }
+        #searchTableWrap th:nth-child(8) { width: 15%; }
+
+        /* ชื่อสาขา/ชื่อสินค้าที่ยาวมาก ตัดด้วย … แล้วดูเต็มได้จาก tooltip */
+        .clip {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 600;
+        }
+
+        .row-fix-off { color: #b9c0c8; cursor: help; margin-left: .25rem; }
+
+        /* หัวคอลัมน์ที่กดเรียงได้ */
+        table.dataTable thead th.sortable { cursor: pointer; user-select: none; padding-right: 1.1rem; position: sticky; }
+        table.dataTable thead th.sortable:hover { background: #dde3e9; }
+        table.dataTable thead th.sortable::after { content: '\2195'; opacity: .35; margin-left: .3rem; }
+        table.dataTable thead th.sorted-asc::after { content: '\2191'; opacity: 1; }
+        table.dataTable thead th.sorted-desc::after { content: '\2193'; opacity: 1; }
+
+        /* ป้ายกำกับในเซลล์ให้จางลง ค่าจริงเด่นขึ้น จะได้กวาดสายตาหาข้อมูลได้เร็ว */
+        .cell-label { color: #6b7280; font-size: 11px; }
+        .v-strong { font-weight: 600; }
+        .col-open { text-align: center; width: 2.5rem; }
+        .col-date { white-space: nowrap; }
+        .open-app { color: #7c5cd6; }
+
+        .row-fix { cursor: pointer; color: coral; margin-left: .25rem; }
+        .row-fix:hover { color: #e2542a; }
+
+        table.dataTable .badge { font-weight: 500; }
+
+        /* คุณภาพพื้นฐาน: มองเห็นโฟกัสตอนกด Tab และเคารพการปิดแอนิเมชันของระบบ */
+        a:focus-visible, button:focus-visible, .form-control:focus-visible,
+        .form-select:focus-visible, .row-fix:focus-visible {
+            outline: 2px solid #2563eb;
+            outline-offset: 2px;
+        }
+
+        @@media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: .01ms !important;
+                transition-duration: .01ms !important;
+            }
         }
     </style>
 </head>
@@ -176,19 +412,18 @@ https://cdn.jsdelivr.net/npm/sweetalert2@11.11.0/dist/sweetalert2.min.css
 </nav>
 <!-- Navbar -->
 
-    <div class="container">
+    @* เดิมเป็น .container (กว้างสุด 1320px) ทำให้ตารางที่มี 8 คอลัมน์และ td ตั้ง white-space:nowrap
+       ถูกบีบอยู่ในกล่องแคบ ๆ กลางจอ — เปลี่ยนเป็นเต็มความกว้างเพื่อให้อ่านตารางได้จริง *@
+    <div class="container-fluid px-4">
         <main role="main" class="pb-3 pt-3">
             @RenderBody()
         </main>
     </div>
 
 
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="~/js/dataTables.js"></script>
+    @* เดิมโหลด jQuery, bootstrap และ DataTables ซ้ำ 2 ชุด (local + CDN) ทำให้ปลั๊กอินถูกลงทะเบียนซ้อนกัน
+       และ site.js ถูกโหลดก่อน jQuery ตัวที่ใช้งานจริง — เหลือชุดเดียว และย้าย site.js ไปท้ายสุด *@
     <script src="~/js/fontawesome.min.js"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
-
 
     <script src="https://code.jquery.com/jquery-3.7.1.js"></script>
      <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
@@ -212,6 +447,8 @@ https://cdn.jsdelivr.net/npm/sweetalert2@11.11.0/dist/sweetalert2.min.css
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/js/bootstrap-datepicker.min.js"></script>
     <script type="text/javascript"
             src="https://cdnjs.cloudflare.com/ajax/libs/mdb-ui-kit/7.3.1/mdb.umd.min.js"></script>
+
+    <script src="~/js/site.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 
 

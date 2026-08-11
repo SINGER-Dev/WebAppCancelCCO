@@ -1,4 +1,8 @@
-﻿using App.Model;
+﻿using App.Clients;
+using Microsoft.Extensions.Caching.Memory;
+using System.Collections.Concurrent;
+using App.Filters;
+using App.Model;
 using App.Models;
 using AspNetCoreGeneratedDocument;
 using Azure;
@@ -30,37 +34,100 @@ namespace App.Controllers
         private readonly ILogger<HomeController> _logger;
         string strConnString, DATABASEK2, WSCANCEL, UrlEztax, UsernameEztax, PasswordEztax, ClientIdEztax, ApiKey, SGAPIESIG, SGDIRECT, SGCESIGNATURE, SGCROSSBANK, C100 , C100Apikey, SGBCancelApikey, SGBCancelApi;
         private static readonly HttpClient client = new HttpClient();
-        public HomeController(ILogger<HomeController> logger)
+        private readonly IDownstreamApi _api;
+        private readonly IMemoryCache _cache;
+
+        // อายุของผลค้นหาที่เก็บไว้ — ตั้งได้จาก config (Search:CacheSeconds), 0 = ปิด cache
+        //
+        // ตั้งไว้สั้นมากโดยตั้งใจ เพราะระบบนี้สถานะของแต่ละใบวิ่งเปลี่ยนตลอดจนกว่างานจะจบ
+        // และคนเปลี่ยนสถานะส่วนใหญ่คือระบบอื่น (K2 / eSig / LMS / งานตามเวลา) ไม่ได้ผ่านแอปนี้
+        // แอปจึงไม่มีทางรู้ว่าต้องล้าง cache เมื่อไร — จะพึ่งการล้างอย่างเดียวไม่ได้
+        // cache ตรงนี้มีไว้ "รวบคำขอที่ถล่มเข้ามาพร้อมกัน" ไม่ได้มีไว้ลดการอ่านข้อมูลระยะยาว
+        private static int _cacheSeconds = 10;
+
+        /// <summary>
+        /// คอลัมน์ที่เรียงลำดับได้ — จำกัดไว้เป็นรายการตายตัว ไม่รับชื่อคอลัมน์จากหน้าจอตรง ๆ
+        /// (กัน SQL injection และกันเรียงด้วยคอลัมน์ที่ไม่มี)
+        ///
+        /// เรียงได้เฉพาะข้อมูลที่อยู่ในขั้นคัดหน้า — ส่วนสถานะสัญญา / NewSale / ลงทะเบียน
+        /// ดึงมาทีหลังเฉพาะแถวของหน้านั้น จึงเรียงทั้งชุดไม่ได้ถ้าไม่ย้ายกลับไปคำนวณก่อนแบ่งหน้า
+        /// (ซึ่งจะช้าเหมือนเดิม)
+        /// </summary>
+        private static readonly Dictionary<string, string> SortColumns = new(StringComparer.OrdinalIgnoreCase)
         {
+            ["date"]     = "SortDate",
+            ["code"]     = "ApplicationCode",
+            ["account"]  = "AccountNo",
+            ["customer"] = "FirstName",
+            ["branch"]   = "SaleDepName",
+            ["product"]  = "ProductModelName",
+            ["status"]   = "ApplicationStatusID",
+        };
 
-            var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-            var builder = new ConfigurationBuilder()
-                        .SetBasePath(Directory.GetCurrentDirectory())
-                        .AddJsonFile($"appsettings.{env}.json", true, false)
-                        .AddJsonFile($"appsettings.json", true, false)
-                        .AddEnvironmentVariables()
-                        .Build();
+        private static string BuildOrderBy(string sort, string dir)
+        {
+            if (string.IsNullOrWhiteSpace(sort) || !SortColumns.TryGetValue(sort, out var col))
+            {
+                col = "SortDate";
+                dir = "desc";
+            }
+            var direction = string.Equals(dir, "asc", StringComparison.OrdinalIgnoreCase) ? "ASC" : "DESC";
+            // ต่อท้ายด้วย ApplicationID เสมอ เพื่อให้ลำดับคงที่ตอนค่าซ้ำกัน (ไม่งั้นแบ่งหน้าแล้วแถวสลับไปมา)
+            return $"{col} {direction}, ApplicationID DESC";
+        }
+
+        /// <summary>ผลค้นหาที่เก็บไว้ พร้อมเวลาที่อ่านจากฐานข้อมูลจริง</summary>
+        private sealed record CachedSearch(SearchResultDto Dto, DateTime ReadAtUtc);
+
+        /// <summary>คืนผลชุดเดิม พร้อมบอกว่าข้อมูลเก่ากี่วินาทีแล้ว (ไม่แก้ของที่เก็บไว้)</summary>
+        private static SearchResultDto WithAge(CachedSearch cached)
+        {
+            var m = cached.Dto.Meta;
+            return new SearchResultDto
+            {
+                Success = cached.Dto.Success,
+                Message = cached.Dto.Message,
+                Data = cached.Dto.Data,
+                Meta = new SearchMetaDto
+                {
+                    Page = m.Page, PageSize = m.PageSize, Total = m.Total, TotalPages = m.TotalPages,
+                    PageSizes = m.PageSizes, GeneratedAt = m.GeneratedAt, Sort = m.Sort, Dir = m.Dir,
+                    AgeSeconds = (int)Math.Round((DateTime.UtcNow - cached.ReadAtUtc).TotalSeconds)
+                }
+            };
+        }
+        private static readonly ConcurrentDictionary<string, SemaphoreSlim> CacheLocks = new();
+
+        public static void ConfigureCache(int seconds) => _cacheSeconds = Math.Max(0, seconds);
+
+        public HomeController(ILogger<HomeController> logger, IDownstreamApi api, IMemoryCache cache, IConfiguration configuration)
+        {
+            _api = api;
+            _cache = cache;
+
+            // เดิมเปิดไฟล์ appsettings จากดิสก์แล้วแปลง JSON ใหม่ทุก request
+            // ตอนนี้ใช้ค่าที่แอปอ่านไว้ตั้งแต่ตอนเปิดระบบแทน
             _logger = logger;
-            strConnString = builder.GetConnectionString("strConnString");
-            DATABASEK2 = builder.GetConnectionString("DATABASEK2");
-            WSCANCEL = builder.GetConnectionString("WSCANCEL");
-            UrlEztax = builder.GetConnectionString("UrlEztax");
-            UsernameEztax = builder.GetConnectionString("UsernameEztax");
-            PasswordEztax = builder.GetConnectionString("PasswordEztax");
-            ClientIdEztax = builder.GetConnectionString("ClientIdEztax");
+            strConnString = configuration.GetConnectionString("strConnString");
+            DATABASEK2 = configuration.GetConnectionString("DATABASEK2");
+            WSCANCEL = configuration.GetConnectionString("WSCANCEL");
+            UrlEztax = configuration.GetConnectionString("UrlEztax");
+            UsernameEztax = configuration.GetConnectionString("UsernameEztax");
+            PasswordEztax = configuration.GetConnectionString("PasswordEztax");
+            ClientIdEztax = configuration.GetConnectionString("ClientIdEztax");
 
-            ApiKey = builder.GetConnectionString("ApiKey");
-            SGAPIESIG = builder.GetConnectionString("SGAPIESIG");
+            ApiKey = configuration.GetConnectionString("ApiKey");
+            SGAPIESIG = configuration.GetConnectionString("SGAPIESIG");
 
-            SGDIRECT = builder.GetConnectionString("SGDIRECT");
-            SGCESIGNATURE = builder.GetConnectionString("SGCESIGNATURE");
-            SGCROSSBANK = builder.GetConnectionString("SGCROSSBANK");
-            C100 = builder.GetConnectionString("C100");
-            C100Apikey = builder.GetConnectionString("C100Apikey");
+            SGDIRECT = configuration.GetConnectionString("SGDIRECT");
+            SGCESIGNATURE = configuration.GetConnectionString("SGCESIGNATURE");
+            SGCROSSBANK = configuration.GetConnectionString("SGCROSSBANK");
+            C100 = configuration.GetConnectionString("C100");
+            C100Apikey = configuration.GetConnectionString("C100Apikey");
             
 
-            SGBCancelApi = builder.GetConnectionString("SGBCancelApi");
-            SGBCancelApikey = builder.GetConnectionString("SGBCancelApikey");
+            SGBCancelApi = configuration.GetConnectionString("SGBCancelApi");
+            SGBCancelApikey = configuration.GetConnectionString("SGBCancelApikey");
         }
 
 
@@ -206,6 +273,7 @@ namespace App.Controllers
             return View(formCancelModel);
         }
 
+        [RequireLogin]
         [HttpPost]
         public ActionResult SearchGetApplicationHistory(SearchGetApplicationHistory _SearchGetApplicationHistory)
         {
@@ -260,7 +328,8 @@ namespace App.Controllers
                     }
                 }
 
-                Log.Debug(JsonConvert.SerializeObject(_SearchGetApplicationHistoryResponeMaster));
+                // เดิม log ผลลัพธ์ทั้งชุด ซึ่งมีชื่อ/เลขบัตร/เบอร์โทรของลูกค้า
+                Log.Debug("history returned {RowCount} row(s)", _SearchGetApplicationHistoryResponeMaster.Count);
 
                 sqlCommand.Parameters.Clear();
 
@@ -272,219 +341,518 @@ namespace App.Controllers
             return PartialView("_SearchGetApplicationHistory", _SearchGetApplicationHistoryResponeMaster);
         }
 
+        /// <summary>
+        /// ค้นหาใบคำขอ — คืนเป็น JSON ทีละหน้า
+        /// เดิม action นี้เรนเดอร์ HTML ทั้งตารางส่งกลับ (หน้าละหลายร้อย KB) ตอนนี้ส่งเฉพาะข้อมูล
+        /// แล้วให้เบราว์เซอร์ประกอบตารางเอง
+        /// </summary>
         [HttpPost]
-        public ActionResult Search(ApplicationRq _ApplicationModel)
+        public async Task<IActionResult> Search(ApplicationRq _ApplicationModel, int page = 1, int pageSize = DefaultPageSize, bool noCache = false, string sort = "date", string dir = "desc")
         {
-            Log.Debug(JsonConvert.SerializeObject(_ApplicationModel));
-            List<ApplicationResponeModel> _ApplicationResponeModelMaster = new List<ApplicationResponeModel>();
+            // ต้องล็อกอินก่อน — เดิม action นี้ไม่เช็ค session ทำให้ดึงข้อมูลลูกค้าได้โดยไม่ล็อกอิน
+            if (HttpContext.Session.GetString("EMP_CODE") == null)
+            {
+                return StatusCode(401, new SearchResultDto
+                {
+                    Success = false,
+                    Message = "หมดเวลาใช้งาน กรุณาเข้าสู่ระบบใหม่"
+                });
+            }
+
+            if (page < 1) page = 1;
+            if (!AllowedPageSizes.Contains(pageSize)) pageSize = DefaultPageSize;
+
+            var cacheKey = BuildSearchCacheKey(_ApplicationModel, page, pageSize, sort, dir);
+
+            if (cacheKey != null && !noCache && _cache.TryGetValue(cacheKey, out CachedSearch hit))
+            {
+                return Json(WithAge(hit));
+            }
+
+            // กันหลายคนวิ่งไปถาม DB พร้อมกันตอน cache หมดอายุ (cache stampede)
+            // ให้ผ่านไปถามได้ทีละคน คนที่เหลือรอแล้วใช้ผลเดียวกัน
+            SemaphoreSlim gate = null;
+            if (cacheKey != null)
+            {
+                gate = CacheLocks.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
+                await gate.WaitAsync();
+            }
 
             try
             {
-
-
-                using (var connection = new SqlConnection(strConnString))
+                if (cacheKey != null && !noCache && _cache.TryGetValue(cacheKey, out CachedSearch hit2))
                 {
-                    connection.Open();
-
-                    var sql = @$"
-
-DECLARE 
-    @TodayStart DATETIME = CAST(@startDate AS DATE),
-    @TomorrowStart DATETIME = DATEADD(DAY, 1, CAST(@endDate AS DATE));
-
-
-                    -- STEP 0: สร้าง Temp สำหรับ contracts
-SELECT signedStatus, statusReceived, documentno
-INTO #CONTRACTS_TEMP
-FROM {SGCESIGNATURE}.[contracts] WITH (NOLOCK)
-WHERE createdAt >= @TodayStart AND createdAt < @TomorrowStart;
-
--- STEP 1: ข้อมูล Serial
-SELECT 
-    s.AppOrderNo,
-    SerialList = STUFF((
-        SELECT ', ' + s2.ItemSerial
-        FROM {SGDIRECT}.[AUTO_SALE_POS_SERIAL] s2 WITH (NOLOCK)
-        WHERE s2.AppOrderNo = s.AppOrderNo
-        FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '')
-INTO #SERIAL_TEMP
-FROM {SGDIRECT}.[AUTO_SALE_POS_SERIAL] s WITH (NOLOCK)
-GROUP BY s.AppOrderNo;
-
--- STEP 2: เอกสารซ้ำใน CONTRACTS
-SELECT COUNT(documentno) AS numdoc, documentno
-INTO #CHECK_CONTRACT
-FROM #CONTRACTS_TEMP WITH (NOLOCK)
-GROUP BY documentno;
-
--- STEP 3: ARM_T_NEWSALES
-SELECT COUNT(ARM_ACC_NO) AS newnum, ARM_ACC_NO, arm_Loaded_flag
-INTO #NEWSALES_TEMP
-FROM {DATABASEK2}.[ARM_T_NEWSALES] WITH (NOLOCK)
-WHERE CREATED_USER = 'SG Finance'
-  AND (@TodayStart IS NULL OR CREATED_DATE >= @TodayStart)
-  AND (@TomorrowStart IS NULL OR CREATED_DATE <= @TomorrowStart)
-GROUP BY ARM_ACC_NO, arm_Loaded_flag;
-
--- STEP 4: ARM_T_PAYMENT
-SELECT COUNT(ARM_ACC_NO) AS paynum, ARM_ACC_NO, ARM_RECEIPT_STAT
-INTO #PAYMENT_TEMP
-FROM {DATABASEK2}.[ARM_T_PAYMENT] WITH (NOLOCK)
-WHERE CREATED_USER = 'SG Finance'
-  AND (@TodayStart IS NULL OR CREATED_DATE >= @TodayStart)
-  AND (@TomorrowStart IS NULL OR CREATED_DATE <= @TomorrowStart)
-GROUP BY ARM_ACC_NO, ARM_RECEIPT_STAT;
-
--- STEP 5: MAIN QUERY
---ISNULL(ISNULL(serial.SerialList, a.ProductSerialNo), '') AS ProductSerialNo, ==> 
-SELECT 
-    a.ApplicationID,
-    a.ApplicationCode,
-    a.AccountNo,
-    a.SaleDepCode,
-    a.SaleDepName,
-    CONVERT(NVARCHAR, a.ApplicationDate, 20) AS ApplicationDate,
-    CONVERT(NVARCHAR, a.ApplicationDate, 20) AS ApplicationDate2,
-    a.ProductID,
-    a.ProductModelName,
-    a.CustomerID,
-    cus.FirstName + ' ' + cus.LastName AS Cusname,
-    cus.MobileNo1 AS CusMobile,
-    a.SaleName,
-    a.SaleTelephoneNo,
-    a.ProductSerialNo AS ProductSerialNo,
-    a.ApplicationStatusID,
-    CASE 
-        WHEN con.signedStatus = 'COMP-Done' THEN N'เรียบร้อย' 
-        WHEN con.signedStatus = 'Initial' THEN N'รอลงนาม'
-        WHEN ISNULL(con.signedStatus, 'NULL') = 'NULL' THEN N'-'
-        ELSE con.signedStatus 
-    END AS signedStatus,
-    CASE WHEN ISNULL(con.statusReceived, '0') = '1' THEN N'รับสินค้าแล้ว' ELSE N'ยังไม่รับสินค้า' END AS StatusReceived,
-    a.ApprovedDate,
-    CASE 
-        WHEN appex.loanTypeCate = 'HP' THEN N'เรียบร้อย' 
-        WHEN ISNULL(regis.IMEI, '') <> '' THEN N'เรียบร้อย' 
-        ELSE N'รอลงทะเบียน' 
-    END AS numregis,
-    CASE WHEN checkcon.numdoc > 1 THEN N'พบรายการซ้ำ' ELSE N'ปกติ' END AS NumDoc,
-    CASE 
-        WHEN new.newnum = 1 AND new.arm_Loaded_flag IN (0, 1) THEN N'เรียบร้อย' 
-        WHEN new.newnum = 1 AND new.arm_Loaded_flag = 2 THEN N'CANCELLED'
-        WHEN new.newnum > 1 THEN N'รายการซ้ำ'
-        ELSE N'ไม่พบรายการ' 
-    END AS NewNum,
-    CASE 
-        WHEN pay.paynum = 1 AND pay.ARM_RECEIPT_STAT = 'APPROVED' THEN N'เรียบร้อย' 
-        WHEN pay.paynum = 1 AND pay.ARM_RECEIPT_STAT = 'CANCELLED' THEN N'CANCELLED'
-        WHEN pay.paynum > 1 THEN N'รายการซ้ำ'
-        ELSE N'ไม่พบรายการ' 
-    END AS PayNum,
-    '' AS LINE_STATUS,
-    '' AS TRANSFER_DATE,
-    appex.RefCode,
-    ISNULL(LEFT(appex.OU_Code, 3), '') AS OU_Code,
-    appex.loanTypeCate,
-    'DUMMY' AS Ref4,
-    '' AS appIns,
-    ISNULL(regis.Status, 'NULL') AS Status
-FROM {DATABASEK2}.[Application] a WITH (NOLOCK)
-INNER JOIN {DATABASEK2}.[ApplicationExtend] appex WITH (NOLOCK) ON appex.ApplicationID = a.ApplicationID
-LEFT JOIN {DATABASEK2}.[Customer] cus WITH (NOLOCK) ON cus.CustomerID = a.CustomerID
-LEFT JOIN {DATABASEK2}.[ApplicationRegisIMIE] regis WITH (NOLOCK)
-    ON regis.IMEI = a.ProductSerialNo AND regis.Status IN ('REGISTER DEVICE SUCCESS', 'ALREADY REGISTERED')
-LEFT JOIN #CONTRACTS_TEMP con ON a.ApplicationCode = con.documentno
-LEFT JOIN #CHECK_CONTRACT checkcon ON checkcon.documentno = a.ApplicationCode
-LEFT JOIN #NEWSALES_TEMP new ON new.ARM_ACC_NO = a.AccountNo
-LEFT JOIN #PAYMENT_TEMP pay ON pay.ARM_ACC_NO = a.AccountNo
-LEFT JOIN #SERIAL_TEMP serial ON serial.AppOrderNo = a.ApplicationCode
-   WHERE (CONVERT(date,a.ApplicationDate,23) >= CONVERT(date,@TodayStart,23) OR ISNULL(@TodayStart,'') = '')
-                      AND (CONVERT(date,a.ApplicationDate,23) <= CONVERT(date,@TomorrowStart,23) OR ISNULL(@TomorrowStart,'') = '')
-                      AND (@status IS NULL OR a.ApplicationStatusID = @status)
-                      AND (@loanTypeCate IS NULL OR appex.loanTypeCate = @loanTypeCate)
-                      AND a.ApplicationDate >= '2024-05-01'
-                      AND (@AccountNo IS NULL OR a.AccountNo = @AccountNo)
-                      AND (@ApplicationCode IS NULL OR a.ApplicationCode = @ApplicationCode OR appex.RefCode = @ApplicationCode)
-                      AND (@ProductSerialNo IS NULL OR a.ProductSerialNo = @ProductSerialNo)
-                      AND (@CustomerID IS NULL OR a.CustomerID = @CustomerID)
-                      AND (@CustomerName IS NULL OR cus.FirstName + ' ' + cus.LastName LIKE '%' + @CustomerName + '%')
-ORDER BY a.ApplicationDate DESC
-OPTION (RECOMPILE);
-
--- STEP 6: ลบ Temp Table
-DROP TABLE #CONTRACTS_TEMP;
-DROP TABLE #SERIAL_TEMP;
-DROP TABLE #CHECK_CONTRACT;
-DROP TABLE #NEWSALES_TEMP;
-DROP TABLE #PAYMENT_TEMP;
-";
-
-                    var parameters = new
-                    {
-                        startdate = _ApplicationModel.startdate,
-                        enddate = _ApplicationModel.enddate,
-                        status = _ApplicationModel.status,
-                        loanTypeCate = _ApplicationModel.loanTypeCate,
-                        AccountNo = _ApplicationModel.AccountNo,
-                        ApplicationCode = _ApplicationModel.ApplicationCode,
-                        ProductSerialNo = _ApplicationModel.ProductSerialNo,
-                        CustomerID = _ApplicationModel.CustomerID,
-                        CustomerName = _ApplicationModel.CustomerName
-                    };
-
-                    var commandDefinition = new CommandDefinition(sql, parameters, commandTimeout: 300); // Timeout in seconds
-
-
-                    var applications = connection.Query<ApplicationResponeModel>(commandDefinition);
-
-                    // กำหนดค่าที่ต้องการตรวจสอบ
-
-                    string[] validStatuses;
-
-                    if (_ApplicationModel.StatusRegis == "1")
-                    {
-                        validStatuses = new string[] { "REGISTER DEVICE SUCCESS", "ALREADY REGISTERED" };
-                    }
-                    else if (_ApplicationModel.StatusRegis == "0")
-                    {
-                        validStatuses = new string[] { "NULL" };
-                    }
-                    else
-                    {
-                        validStatuses = new string[] { "REGISTER DEVICE SUCCESS", "ALREADY REGISTERED", "NULL" };
-                    }
-
-
-                    foreach (var application in applications)
-                    {
-                        bool exists = _ApplicationResponeModelMaster.Any(m => m.ApplicationCode == application.ApplicationCode);
-                        if (!exists && Array.Exists(validStatuses, element => element == application.Status.ToUpper()))
-                        {
-                            string datenowText = DateTime.Now.ToString("yyyy-MM-dd", new CultureInfo("en-US"));
-                            if (application.ApplicationDate.ToString() == datenowText)
-                            {
-                                application.datenowcheck = "1";
-                            }
-                            else
-                            {
-                                application.datenowcheck = "0";
-                            }
-                            _ApplicationResponeModelMaster.Add(application);
-                        }
-
-                    }
-
+                    return Json(WithAge(hit2));
                 }
 
+                List<ApplicationResponeModel> rows;
+                try
+                {
+                    rows = RunSearch(_ApplicationModel, (page - 1) * pageSize, pageSize, sort, dir);
+                }
+                catch (Exception ex)
+                {
+                    // เดิม catch แล้วคืนตารางว่าง ทำให้ "ค้นหาไม่สำเร็จ" หน้าตาเหมือน "ไม่พบข้อมูล"
+                    Log.Error(ex, "Search failed");
+                    return StatusCode(500, new SearchResultDto
+                    {
+                        Success = false,
+                        Message = "ค้นหาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง หากยังไม่ได้ให้แจ้งทีมผู้ดูแล"
+                    });
+                }
+
+                int totalRows = rows.Count > 0 ? rows[0].TotalRows : 0;
+
+                var result = new SearchResultDto
+                {
+                    Success = true,
+                    Data = rows.Select(ToRowDto).ToList(),
+                    Meta = new SearchMetaDto
+                    {
+                        Page = page,
+                        PageSize = pageSize,
+                        Total = totalRows,
+                        TotalPages = totalRows == 0 ? 0 : (int)Math.Ceiling(totalRows / (double)pageSize),
+                        PageSizes = AllowedPageSizes,
+                        GeneratedAt = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
+                        AgeSeconds = 0,
+                        Sort = SortColumns.ContainsKey(sort ?? "") ? sort.ToLowerInvariant() : "date",
+                        Dir = string.Equals(dir, "asc", StringComparison.OrdinalIgnoreCase) ? "asc" : "desc" 
+                    }
+                };
+
+                if (cacheKey != null)
+                {
+                    _cache.Set(cacheKey, new CachedSearch(result, DateTime.UtcNow), TimeSpan.FromSeconds(_cacheSeconds));
+                }
+
+                return Json(result);
+            }
+            finally
+            {
+                gate?.Release();
+            }
+        }
+
+        /// <summary>
+        /// คืน key สำหรับเก็บผลค้นหาไว้ในหน่วยความจำ หรือ null ถ้าเคสนี้ไม่ควรเก็บ
+        ///
+        /// เก็บเฉพาะการ "เปิดดูรายวัน" ซึ่งเป็นเคสที่ทุกคนเปิดเหมือนกันและกดซ้ำบ่อย
+        /// ส่วนการค้นเจาะจง (เลขที่ใบคำขอ/สัญญา/serial/เลขบัตร/ชื่อลูกค้า) ไม่เก็บ
+        /// เพราะแต่ละคนค้นไม่เหมือนกัน เก็บไปก็ไม่มีใครใช้ซ้ำ และเป็นข้อมูลเฉพาะบุคคล
+        /// </summary>
+        private static string BuildSearchCacheKey(ApplicationRq m, int page, int pageSize, string sort, string dir)
+        {
+            if (_cacheSeconds <= 0) return null;
+            if (page != 1) return null;
+            if (Nz(m.ApplicationCode) != null || Nz(m.AccountNo) != null || Nz(m.ProductSerialNo) != null
+                || Nz(m.CustomerID) != null || Nz(m.CustomerName) != null)
+            {
+                return null;
+            }
+
+            return string.Join("|", "search", InvalidateSearchCacheAttribute.Version,
+                Nz(m.startdate) ?? DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                Nz(m.enddate) ?? DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                Nz(m.status), Nz(m.loanTypeCate), Nz(m.StatusRegis), pageSize, sort, dir);
+        }
+
+        /// <summary>
+        /// แปลงแถวจากฐานข้อมูลเป็นข้อมูลที่หน้าจอใช้ พร้อมคำนวณว่าปุ่มซ่อมตัวไหนควรแสดง
+        /// เงื่อนไขทั้งหมดยกมาจากไฟล์ Razor เดิม (_SearchResults.cshtml) แบบตรงตัว
+        /// </summary>
+        private static SearchRowDto ToRowDto(ApplicationResponeModel r)
+        {
+            string signed = (r.signedStatus ?? "").Trim();
+            string received = (r.statusReceived ?? "").Trim();
+            string status = (r.ApplicationStatusID ?? "").Trim();
+            string loanType = (r.loanTypeCate ?? "").Trim();
+            string ou = (r.OU_Code ?? "").Trim();
+            string serial = (r.ProductSerialNo ?? "").Trim();
+            string ref4 = (r.Ref4 ?? "").Trim();
+            string regis = (r.numregis ?? "").Trim();
+
+            bool isLockphone = loanType == "LOCKPHONE";
+            bool isHp = loanType == "HP";
+            bool receivedGoods = received == "รับสินค้าแล้ว";
+            bool signedDone = signed == "เรียบร้อย";
+
+            // ปุ่มส่งสถานะ CLOSED ซ้ำ
+            bool canPushStatusClosed = signedDone && receivedGoods && status == "CLOSED" && regis == "เรียบร้อย";
+
+            // ปุ่มสร้างลิงก์ e-signature ใหม่ — 3 กรณีตามประเภทสินเชื่อและ OU
+            bool canGenEsignature =
+                   (isLockphone && ou == "SGC" && status == "CLOSING" && (signed == "รอลงนาม" || signed == "-") && serial != "")
+                || (isLockphone && ou == "STL" && status == "CLOSING" && signed == "รอลงนาม" && serial != "" && ref4 != "")
+                || (isHp && ou == "STL" && status == "CLOSING" && signed == "รอลงนาม" && serial != "" && ref4 != "");
+
+            // ปุ่มลงทะเบียนเครื่อง — ของเดิมเขียนแยก 4 สาขา แต่ยุบได้เป็นเงื่อนไขเดียว
+            // ไม่ดู numregis โดยตั้งใจ: ใบที่ลงทะเบียนไปแล้วต้องกดยิงซ้ำได้ เพราะบางครั้ง
+            // ปลายทางไม่ได้รับ หรือต้องส่งใหม่ — CCO ใช้ปุ่มนี้ยิงซ้ำเป็นงานประจำ
+            bool regisDone = regis == "เรียบร้อย";
+            bool regisEligible = isLockphone && receivedGoods && (signedDone || signed == "COMP-Fail");
+            bool canRegisImei = regisEligible;
+
+            // ถ้ายังไม่ลงทะเบียนแต่กดไม่ได้ ให้บอกสาเหตุบนหน้าจอ แทนที่จะไม่มีอะไรขึ้นเลย
+            string? regisBlockedReason = null;
+            if (isLockphone && !regisDone && !regisEligible)
+            {
+                var reasons = new List<string>();
+                if (!receivedGoods) reasons.Add("ยังไม่รับสินค้า");
+                if (!signedDone && signed != "COMP-Fail") reasons.Add("สัญญายังไม่เรียบร้อย");
+                regisBlockedReason = "ยังลงทะเบียนเครื่องไม่ได้ เพราะ" + string.Join(" และ ", reasons);
+            }
+
+            // ปุ่มส่ง NewSale ซ้ำ (แสดงเฉพาะตอนที่ยังไม่มี NewSale)
+            bool canRepushNewSale = signedDone && receivedGoods && ou != "STL" && (r.newnum ?? "").Trim() != "เรียบร้อย";
+
+            return new SearchRowDto
+            {
+                ApplicationCode = r.ApplicationCode,
+                RefCode = r.RefCode,
+                ApplicationDate = r.ApplicationDate,
+                AccountNo = r.AccountNo,
+                CustomerId = r.CustomerID,
+                CustomerName = r.Cusname,
+                CustomerMobile = r.cusMobile,
+                SaleDepCode = r.SaleDepCode,
+                SaleDepName = r.SaleDepName,
+                SaleName = r.SaleName,
+                SaleTelephoneNo = r.SaleTelephoneNo,
+                ProductModelName = r.ProductModelName,
+                ProductSerialNo = r.ProductSerialNo,
+                ApplicationStatusId = r.ApplicationStatusID,
+                LineStatus = r.LINE_STATUS,
+                SignedStatus = r.signedStatus,
+                StatusReceived = r.statusReceived,
+                NumRegis = r.numregis,
+                NumDoc = r.numdoc,
+                NewNum = r.newnum,
+                PayNum = r.paynum,
+                LoanTypeCate = r.loanTypeCate,
+                OuCode = r.OU_Code,
+                CanPushStatusClosed = canPushStatusClosed,
+                CanGenEsignature = canGenEsignature,
+                CanRegisImei = canRegisImei,
+                CanRepushNewSale = canRepushNewSale,
+                CanFixDuplicateContract = (r.numdoc ?? "").Trim() == "พบรายการซ้ำ",
+                RegisBlockedReason = regisBlockedReason
+            };
+        }
+
+        /// <summary>
+        /// ดาวน์โหลดผลการค้นหา "ทั้งหมด" ตามเงื่อนไขที่กรอก (ไม่ใช่เฉพาะหน้าที่แสดงอยู่)
+        /// จำเป็นต้องทำฝั่ง server เพราะเมื่อแบ่งหน้าที่ server แล้ว ปุ่ม export ของ DataTables
+        /// จะเห็นข้อมูลแค่หน้าเดียว
+        /// </summary>
+        [HttpPost]
+        public IActionResult ExportSearch(ApplicationRq _ApplicationModel)
+        {
+            if (HttpContext.Session.GetString("EMP_CODE") == null)
+            {
+                return Unauthorized();
+            }
+
+            List<ApplicationResponeModel> rows;
+            try
+            {
+                rows = RunSearch(_ApplicationModel, 0, ExportMaxRows, "date", "desc");
             }
             catch (Exception ex)
             {
-                Log.Debug(ex.Message);
+                Log.Error(ex, "ExportSearch failed");
+                return StatusCode(500, "ดาวน์โหลดไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
             }
 
-            return PartialView("_SearchResults", _ApplicationResponeModelMaster);
+            var fileName = $"search-result-{DateTime.Now:yyyyMMdd-HHmmss}.csv";
+            Response.Headers.ContentDisposition = $"attachment; filename={fileName}";
+
+            // ทยอยเขียนลงสายส่งทีละแถว แทนการต่อสตริงทั้งไฟล์ไว้ในหน่วยความจำก่อน
+            // (5 หมื่นแถวจะกินแรมหลายสิบเมกะไบต์ต่อคนที่กดดาวน์โหลดพร้อมกัน)
+            return new FileCallbackResult("text/csv; charset=utf-8", async stream =>
+            {
+                // UTF-8 BOM เพื่อให้ Excel อ่านภาษาไทยได้ถูกต้องเมื่อเปิดไฟล์ CSV โดยตรง
+                await stream.WriteAsync(Encoding.UTF8.GetPreamble());
+
+                await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+
+                await writer.WriteLineAsync(string.Join(",", new[]
+                {
+                    "วันที่สร้างใบคำขอ", "เลขที่ใบคำขอ", "RefCode", "เลขที่สัญญา", "เลขบัตรประชาชน",
+                    "ชื่อลูกค้า", "เบอร์โทรศัพท์ลูกค้า", "รหัสสาขา", "ชื่อสาขา", "ชื่อพนักงานขาย",
+                    "เบอร์พนักงานขาย", "ชื่อสินค้า", "Serial / IMEI", "สถานะ", "จำนวนสัญญา",
+                    "สถานะสัญญา", "สถานะรับสินค้า", "ลงทะเบียนเครื่อง", "NewSale", "NewPayment",
+                    "ประเภทรายการ", "OU"
+                }.Select(Csv)));
+
+                foreach (var r in rows)
+                {
+                    await writer.WriteLineAsync(string.Join(",", new[]
+                    {
+                        r.ApplicationDate, r.ApplicationCode, r.RefCode, r.AccountNo, r.CustomerID,
+                        r.Cusname, r.cusMobile, r.SaleDepCode, r.SaleDepName, r.SaleName,
+                        r.SaleTelephoneNo, r.ProductModelName, r.ProductSerialNo, r.ApplicationStatusID, r.numdoc,
+                        r.signedStatus, r.statusReceived, r.numregis, r.newnum, r.paynum,
+                        r.loanTypeCate, r.OU_Code
+                    }.Select(Csv)));
+                }
+
+                await writer.FlushAsync();
+            });
         }
+
+        /// <summary>ครอบค่าให้ปลอดภัยสำหรับไฟล์ CSV (กันคอมมา ตัวขึ้นบรรทัดใหม่ และ formula injection)</summary>
+        private static string Csv(string value)
+        {
+            var v = value ?? "";
+            if (v.Length > 0 && (v[0] == '=' || v[0] == '+' || v[0] == '-' || v[0] == '@'))
+            {
+                v = "'" + v;
+            }
+            return "\"" + v.Replace("\"", "\"\"") + "\"";
+        }
+
+        /// <summary>
+        /// รันคำค้นเดียวกันกับที่หน้าจอใช้ โดยระบุช่วงแถวที่ต้องการ (offset/take)
+        /// ใช้ร่วมกันระหว่างการแสดงผลทีละหน้าและการดาวน์โหลดทั้งผลลัพธ์
+        /// </summary>
+        private List<ApplicationResponeModel> RunSearch(ApplicationRq model, int offset, int take, string sort, string dir)
+        {
+            // ปรับช่วงวันที่ก่อนส่งเข้า SQL
+            // - ถ้าระบุ key เจาะจง (เลขที่ใบคำขอ/สัญญา/serial/เลขบัตร) → ไม่ต้องจำกัดวันที่ ค้นได้ทั้งหมด
+            // - ถ้าไม่ระบุ key และไม่ใส่วันที่ → ใช้ "วันนี้" แทนการดึงย้อนหลังทั้งหมดตั้งแต่ 2024-05-01
+            string accountNo = Nz(model.AccountNo);
+            string applicationCode = Nz(model.ApplicationCode);
+            string productSerialNo = Nz(model.ProductSerialNo);
+            string customerId = Nz(model.CustomerID);
+
+            bool hasSpecificKey = accountNo != null || applicationCode != null
+                                  || productSerialNo != null || customerId != null;
+
+            string startDate = Nz(model.startdate);
+            string endDate = Nz(model.enddate);
+
+            if (!hasSpecificKey)
+            {
+                if (startDate == null && endDate == null)
+                {
+                    startDate = endDate = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                }
+                else
+                {
+                    startDate ??= endDate;
+                    endDate ??= startDate;
+                }
+            }
+
+            using var connection = new SqlConnection(strConnString);
+            connection.Open();
+
+            // ---- รอบที่ 1: คัดเฉพาะใบคำขอของหน้านี้ (≤ 100 แถว) ----
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var swTotal = System.Diagnostics.Stopwatch.StartNew();
+
+            var pageRows = connection.Query<PageRow>(new CommandDefinition(BuildPageSql(BuildOrderBy(sort, dir)), new
+            {
+                startDate,
+                endDate,
+                status = Nz(model.status),
+                loanTypeCate = Nz(model.loanTypeCate),
+                AccountNo = accountNo,
+                ApplicationCode = applicationCode,
+                ProductSerialNo = productSerialNo,
+                CustomerID = customerId,
+                CustomerName = Nz(model.CustomerName),
+                StatusRegis = Nz(model.StatusRegis),
+                offset,
+                pageSize = take
+            }, commandTimeout: 120)).ToList();
+
+            Log.Information("ค้นหา: เลือกหน้า {Ms} ms ({Rows} แถว)", sw.ElapsedMilliseconds, pageRows.Count);
+
+            if (pageRows.Count == 0) return new List<ApplicationResponeModel>();
+
+            // ---- รอบที่ 2: ดึงข้อมูลประกอบ "เฉพาะคีย์ของหน้านี้" ----
+            // เดิมผูกด้วย EXISTS กับตารางชั่วคราว ซึ่ง SQL Server ส่งเงื่อนไขข้ามไปให้เซิร์ฟเวอร์ปลายทาง
+            // (contracts อยู่คนละเครื่อง) ไม่ได้ จึงต้องกวาดตารางฝั่งโน้นทั้งก้อนทุกครั้ง — บน PROD กินไป ~3.4 วินาที
+            // ส่งเป็นรายการคีย์แทน ปลายทาง seek ตรง ๆ ได้ เหลือ ~0.15 วินาที
+            sw.Restart();
+            var codes = pageRows.Select(r => r.ApplicationCode).Where(c => !string.IsNullOrEmpty(c)).Distinct().ToList();
+            var accounts = pageRows.Select(r => r.AccountNo).Where(c => !string.IsNullOrEmpty(c)).Distinct().ToList();
+            var serials = pageRows.Select(r => r.ProductSerialNo).Where(c => !string.IsNullOrEmpty(c)).Distinct().ToList();
+
+            // ต้องแบ่งรายการคีย์เป็นก้อน — SQL Server รับพารามิเตอร์ได้สูงสุด 2,100 ตัวต่อคำสั่ง
+            // ตอนแสดงผลทีละหน้าไม่เคยชน แต่ตอนดาวน์โหลดทั้งหมด (หลายหมื่นแถว) จะชนทันที
+            var contracts = QueryInChunks<ContractRow>(connection, BuildContractSql(), "codes", codes);
+            var newSales = QueryInChunks<NewSaleRow>(connection, BuildNewSaleSql(), "accounts", accounts);
+            var payments = QueryInChunks<PaymentRow>(connection, BuildPaymentSql(), "accounts", accounts);
+            var regis = QueryInChunks<RegisRow>(connection, BuildRegisSql(), "serials", serials);
+
+            Log.Information("ค้นหา: ข้อมูลประกอบ {Ms} ms (สัญญา {C} / newsale {N} / payment {P} / regis {R}) — รวม {Total} ms",
+                sw.ElapsedMilliseconds, contracts.Count, newSales.Count, payments.Count, regis.Count, swTotal.ElapsedMilliseconds);
+
+            var contractByCode = contracts.GroupBy(c => c.documentno).ToDictionary(g => g.Key, g => g.First());
+            var newSaleByAcc = newSales.GroupBy(n => n.ARM_ACC_NO).ToDictionary(g => g.Key, g => g.First());
+            var paymentByAcc = payments.GroupBy(p => p.ARM_ACC_NO).ToDictionary(g => g.Key, g => g.First());
+            var regisBySerial = regis.GroupBy(r => r.IMEI).ToDictionary(g => g.Key, g => g.First());
+
+            return pageRows.Select(r => Compose(r, contractByCode, newSaleByAcc, paymentByAcc, regisBySerial)).ToList();
+        }
+
+        /// <summary>จำนวนคีย์สูงสุดต่อคำสั่ง — ต่ำกว่าเพดานพารามิเตอร์ 2,100 ของ SQL Server พอสมควร</summary>
+        private const int KeyChunkSize = 1000;
+
+        /// <summary>ยิงคำสั่งเดิมซ้ำเป็นก้อน ๆ ตามจำนวนคีย์ แล้วรวมผลลัพธ์</summary>
+        private static List<T> QueryInChunks<T>(SqlConnection connection, string sql, string paramName, List<string> keys)
+        {
+            var result = new List<T>();
+            for (int i = 0; i < keys.Count; i += KeyChunkSize)
+            {
+                var chunk = keys.GetRange(i, Math.Min(KeyChunkSize, keys.Count - i));
+                var parameters = new DynamicParameters();
+                parameters.Add(paramName, chunk);
+                result.AddRange(connection.Query<T>(new CommandDefinition(sql, parameters, commandTimeout: 180)));
+            }
+            return result;
+        }
+
+        /// <summary>ประกอบแถวผลลัพธ์ — ข้อความสถานะทุกตัวยกมาจาก CASE เดิมใน SQL แบบตรงตัว</summary>
+        private static ApplicationResponeModel Compose(
+            PageRow r,
+            IReadOnlyDictionary<string, ContractRow> contracts,
+            IReadOnlyDictionary<string, NewSaleRow> newSales,
+            IReadOnlyDictionary<string, PaymentRow> payments,
+            IReadOnlyDictionary<string, RegisRow> regis)
+        {
+            contracts.TryGetValue(r.ApplicationCode ?? "", out var con);
+            newSales.TryGetValue(r.AccountNo ?? "", out var nsale);
+            payments.TryGetValue(r.AccountNo ?? "", out var pay);
+            regis.TryGetValue(r.ProductSerialNo ?? "", out var reg);
+
+            string signed = con?.signedStatus switch
+            {
+                "COMP-Done" => "เรียบร้อย",
+                "Initial" => "รอลงนาม",
+                null or "" => "-",
+                var other => other
+            };
+
+            string newNum = nsale == null ? "ไม่พบรายการ"
+                : nsale.newnum > 1 ? "รายการซ้ำ"
+                : nsale.arm_Loaded_flag == 2 ? "CANCELLED"
+                : (nsale.arm_Loaded_flag == 0 || nsale.arm_Loaded_flag == 1) ? "เรียบร้อย"
+                : "ไม่พบรายการ";
+
+            string payNum = pay == null ? "ไม่พบรายการ"
+                : pay.paynum > 1 ? "รายการซ้ำ"
+                : pay.ARM_RECEIPT_STAT == "APPROVED" ? "เรียบร้อย"
+                : pay.ARM_RECEIPT_STAT == "CANCELLED" ? "CANCELLED"
+                : "ไม่พบรายการ";
+
+            return new ApplicationResponeModel
+            {
+                ApplicationID = r.ApplicationID,
+                ApplicationCode = r.ApplicationCode,
+                AccountNo = r.AccountNo,
+                SaleDepCode = r.SaleDepCode,
+                SaleDepName = r.SaleDepName,
+                ApplicationDate = r.ApplicationDate,
+                ProductModelName = r.ProductModelName,
+                CustomerID = r.CustomerID,
+                Cusname = string.Join(" ", new[] { r.FirstName, r.LastName }.Where(x => !string.IsNullOrWhiteSpace(x))),
+                cusMobile = r.MobileNo1,
+                SaleName = r.SaleName,
+                SaleTelephoneNo = r.SaleTelephoneNo,
+                ProductSerialNo = r.ProductSerialNo,
+                ApplicationStatusID = r.ApplicationStatusID,
+                signedStatus = signed,
+                statusReceived = con?.statusReceived == "1" ? "รับสินค้าแล้ว" : "ยังไม่รับสินค้า",
+                numregis = r.loanTypeCate == "HP" || !string.IsNullOrEmpty(reg?.IMEI) ? "เรียบร้อย" : "รอลงทะเบียน",
+                numdoc = (con?.numdoc ?? 0) > 1 ? "พบรายการซ้ำ" : "ปกติ",
+                newnum = newNum,
+                paynum = payNum,
+                LINE_STATUS = "",
+                RefCode = r.RefCode,
+                OU_Code = string.IsNullOrEmpty(r.OU_Code) ? "" : r.OU_Code[..Math.Min(3, r.OU_Code.Length)],
+                loanTypeCate = r.loanTypeCate,
+                Ref4 = "DUMMY",
+                appIns = "",
+                Status = reg?.Status ?? "NULL",
+                TotalRows = r.TotalRows
+            };
+        }
+
+        private class PageRow
+        {
+            public string? ApplicationID { get; set; }
+            public string? ApplicationCode { get; set; }
+            public string? AccountNo { get; set; }
+            public string? SaleDepCode { get; set; }
+            public string? SaleDepName { get; set; }
+            public string? ApplicationDate { get; set; }
+            public string? ProductModelName { get; set; }
+            public string? CustomerID { get; set; }
+            public string? SaleName { get; set; }
+            public string? SaleTelephoneNo { get; set; }
+            public string? ProductSerialNo { get; set; }
+            public string? ApplicationStatusID { get; set; }
+            public string? FirstName { get; set; }
+            public string? LastName { get; set; }
+            public string? MobileNo1 { get; set; }
+            public string? RefCode { get; set; }
+            public string? OU_Code { get; set; }
+            public string? loanTypeCate { get; set; }
+            public int TotalRows { get; set; }
+        }
+
+        private class ContractRow
+        {
+            public string documentno { get; set; } = "";
+            public string? signedStatus { get; set; }
+            public string? statusReceived { get; set; }
+            public int numdoc { get; set; }
+        }
+
+        private class NewSaleRow
+        {
+            public string ARM_ACC_NO { get; set; } = "";
+            public int newnum { get; set; }
+            public int arm_Loaded_flag { get; set; }
+        }
+
+        private class PaymentRow
+        {
+            public string ARM_ACC_NO { get; set; } = "";
+            public int paynum { get; set; }
+            public string? ARM_RECEIPT_STAT { get; set; }
+        }
+
+        private class RegisRow
+        {
+            public string IMEI { get; set; } = "";
+            public string? Status { get; set; }
+        }
+
+        // SQL ทั้งหมดย้ายไปอยู่ที่ App/Data/SearchSql.cs เพื่อให้งานอุ่นข้อมูลเบื้องหลังใช้ชุดเดียวกัน
+        private string BuildPageSql(string orderBy) => App.Data.SearchSql.Page(DATABASEK2, orderBy);
+        private string BuildContractSql() => App.Data.SearchSql.Contract(DATABASEK2, SGCESIGNATURE);
+        private string BuildNewSaleSql() => App.Data.SearchSql.NewSale(DATABASEK2);
+        private string BuildPaymentSql() => App.Data.SearchSql.Payment(DATABASEK2);
+        private string BuildRegisSql() => App.Data.SearchSql.Regis(DATABASEK2);
+
+
+        // ขนาดหน้าเริ่มต้นและตัวเลือกที่อนุญาต (จำกัดไว้เพื่อไม่ให้ยิงค่าใหญ่ ๆ เข้ามาทาง query string)
+        private const int DefaultPageSize = 5;
+        private static readonly int[] AllowedPageSizes = { 5, 10, 20, 50, 100 };
+
+        // เพดานจำนวนแถวของการดาวน์โหลดไฟล์ (ดึงทั้งผลลัพธ์ ไม่ใช่เฉพาะหน้าที่แสดง)
+        private const int ExportMaxRows = 50000;
+
+        // แปลงค่าว่าง/ช่องว่างให้เป็น null เพื่อให้เงื่อนไข (@p IS NULL OR ...) ใน SQL ทำงานถูกต้อง
+        private static string Nz(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         // Dummy method to simulate search operation
+        [InvalidateSearchCache]
+        [RequireLogin]
         [HttpPost]
         public async Task<string> UpdateDataCancel(FormConfirmModel _FormConfirmModel)
         {
@@ -658,6 +1026,8 @@ DROP TABLE #PAYMENT_TEMP;
 
         }
 
+        [InvalidateSearchCache]
+        [RequireLogin]
         [HttpPost]
         public async Task<string> UpdateDataCancelCLOSED(FormConfirmModel _FormConfirmModel)
         {
@@ -899,6 +1269,7 @@ DROP TABLE #PAYMENT_TEMP;
             return webRequest;
         }
 
+        [RequireLogin]
         [HttpPost]
         public async Task<MessageModel> CCOWebService(CCOWebServiceModel _CCOWebService)
         {
@@ -1013,6 +1384,7 @@ DROP TABLE #PAYMENT_TEMP;
             return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
         }
 
+        [RequireLogin]
         [HttpPost]
         [Route("GetApplication")]
         public async Task<GetApplicationRespone> GetApplication(GetApplication _GetApplication)
@@ -1075,7 +1447,8 @@ DROP TABLE #PAYMENT_TEMP;
                 connection.Close();
                 if (dt.Rows.Count > 0)
                 {
-                    Log.Debug(JsonConvert.SerializeObject(dt));
+                    // เดิม log ทั้ง DataTable ซึ่งมีเลขบัตรประชาชน/เบอร์โทรของลูกค้าลงไฟล์ (ระดับ Debug เปิดบน prod)
+                    Log.Debug("query returned {RowCount} row(s)", dt.Rows.Count);
 
                     _GetApplicationRespone.statusCode = "PASS";
                     _GetApplicationRespone.AccountNo = dt.Rows[0]["AccountNo"].ToString();
@@ -1129,285 +1502,498 @@ DROP TABLE #PAYMENT_TEMP;
 
         }
 
+        [InvalidateSearchCache]
+        [RequireLogin]
         [HttpPost]
-        public async Task<MessageReturn> GetStatusClosedSGFinance([FromBody] C100StatusRq _C100StatusRq)
+        public async Task<IActionResult> GetStatusClosedSGFinance([FromBody] C100StatusRq _C100StatusRq)
         {
-            Log.Debug("GetStatusClosedSGFinance By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_C100StatusRq));
-            string ResultDescription = "";
-            MessageReturn _MessageReturn = new MessageReturn();
+            var actor = HttpContext.Session.GetString("EMP_CODE");
+            var code = _C100StatusRq?.ApplicationCode;
+            Log.Information("ส่งสถานะ CLOSED ซ้ำ: {Code} โดย {Actor}", code, actor);
+
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return BadRequest(ActionResultDto.Fail("ไม่พบเลขที่ใบคำขอ กรุณาค้นหาใหม่อีกครั้ง"));
+            }
+
             try
             {
-
-                SqlConnection connection = new SqlConnection();
-                connection.ConnectionString = strConnString;
-                connection.Open();
-                SqlCommand sqlCommand;
-                string strSQL = DATABASEK2 + ".[GetStatusClosedSGFinance]";
-                sqlCommand = new SqlCommand(strSQL, connection);
-                sqlCommand.CommandType = CommandType.StoredProcedure;
-                sqlCommand.Parameters.AddWithValue("ApplicationCode", _C100StatusRq.ApplicationCode);
-
-                SqlDataAdapter dtAdapter = new SqlDataAdapter();
-                dtAdapter.SelectCommand = sqlCommand;
-                DataTable dt = new DataTable();
-                dtAdapter.Fill(dt);
-                connection.Close();
-                sqlCommand.Parameters.Clear();
-
-                if (dt.Rows.Count > 0)
+                // ดึง request เดิมที่เคยส่งไปปลายทางจาก log แล้วส่งซ้ำ (SP เป็นตัวหาให้)
+                StatusReplayRow row;
+                using (var connection = new SqlConnection(strConnString))
                 {
-                    Log.Debug(JsonConvert.SerializeObject(dt));
-
-                    requestBodyValue _requestBodyValue = JsonConvert.DeserializeObject<requestBodyValue>(dt.Rows[0]["StatusDesc"].ToString());
-
-                    var requestBody = new
-                    {
-                        applicationCode = _requestBodyValue.applicationCode,
-                        applicationStatus = _requestBodyValue.applicationStatus,
-                        approvalStatus = _requestBodyValue.approvalStatus,
-                        approvalDatetime = _requestBodyValue.approvalDatetime,
-                        remark = "",
-                        losApplicationCode = _requestBodyValue.applicationCode,
-                        contractNo = dt.Rows[0]["Accountno"].ToString()
-                    };
-
-                    Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody));
-
-                    using (HttpClient client = new HttpClient())
-                    {
-                        string jsonBody = JsonConvert.SerializeObject(requestBody);
-
-                        client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
-
-                        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                        HttpResponseMessage responseDevice = await client.PostAsync(C100 + "/v2/SgFinance/C100_Status", content);
-                        int DeviceStatusCode = (int)responseDevice.StatusCode;
-
-                        Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
-
-                        if (responseDevice.IsSuccessStatusCode)
-                        {
-                            _MessageReturn.StatusCode = "200";
-                            _MessageReturn.Message = "PASS";
-                            
-                        }
-                    }
+                    row = (await connection.QueryAsync<StatusReplayRow>(
+                        new CommandDefinition($"{DATABASEK2}.[GetStatusClosedSGFinance]",
+                            new { ApplicationCode = code },
+                            commandType: CommandType.StoredProcedure,
+                            commandTimeout: 60))).FirstOrDefault();
                 }
 
-                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
-                return _MessageReturn;
-            }
-            catch (Exception ex)
-            {
-                _MessageReturn.StatusCode = "500";
-                _MessageReturn.Message = ex.Message;
+                if (row == null || string.IsNullOrWhiteSpace(row.StatusDesc))
+                {
+                    // เดิมกรณีนี้เงียบสนิท ผู้ใช้กดแล้วไม่มีอะไรเกิดขึ้นและไม่รู้ว่าทำไม
+                    return NotFound(ActionResultDto.Fail(
+                        $"ใบคำขอ {code} ไม่เคยส่งสถานะไปยังระบบสินเชื่อมาก่อน จึงไม่มีรายการให้ส่งซ้ำ"));
+                }
 
-                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
-
-                return _MessageReturn;
-            }
-        }
-
-        [HttpPost]
-        public async Task<MessageReturn> GenEsignature([FromBody] C100StatusRq _C100StatusRq)
-        {
-            Log.Debug("GenEsignature By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_C100StatusRq));
-            MessageReturn _MessageReturn = new MessageReturn();
-            try
-            {
+                var original = JsonConvert.DeserializeObject<requestBodyValue>(row.StatusDesc);
 
                 var requestBody = new
                 {
-                    applicationCode = _C100StatusRq.ApplicationCode
+                    applicationCode = original.applicationCode,
+                    applicationStatus = original.applicationStatus,
+                    approvalStatus = original.approvalStatus,
+                    approvalDatetime = original.approvalDatetime,
+                    remark = "",
+                    losApplicationCode = original.applicationCode,
+                    contractNo = row.Accountno
                 };
 
-                using (HttpClient client = new HttpClient())
+                var response = await _api.PostJsonAsync("c100", "/v2/SgFinance/C100_Status", requestBody,
+                                                        $"ส่งสถานะ CLOSED ซ้ำ [{code}] โดย {actor}");
+
+                if (!response.Reached)
                 {
-                    string jsonBody = JsonConvert.SerializeObject(requestBody);
-
-                    //client.DefaultRequestHeaders.Add("apikey", ApiKey);
-                    //client.DefaultRequestHeaders.Add("user", "DEV");
-
-                    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                    HttpResponseMessage responseDevice = await client.PostAsync("https://sg-posservice.singerthai.co.th:10082/v1/LOS/SGF_ReCreateESig", content);
-                    //HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/api/v2/GenEsignature", content);
-                    int DeviceStatusCode = (int)responseDevice.StatusCode;
-
-                    Log.Debug("API RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
-
-                    if (responseDevice.IsSuccessStatusCode)
-                    {
-                        var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
-
-                        //_MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
-                        _MessageReturn.StatusCode = "200";
-                        _MessageReturn.Message = "Success.";
-                    }
+                    return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
+                        "ตอนนี้ติดต่อระบบสินเชื่อไม่ได้ กรุณาลองใหม่อีกครั้งในอีกสักครู่", response.TransportError));
                 }
 
-                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
-                return _MessageReturn;
+                if (!response.IsSuccess)
+                {
+                    // เดิมกรณีนี้คืน object ว่างพร้อม HTTP 200 หน้าจอจึงขึ้น [object Object]
+                    return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
+                        "ระบบสินเชื่อไม่รับรายการนี้ สถานะจึงยังไม่ถูกอัปเดต", response.Body));
+                }
+
+                return Ok(ActionResultDto.Success($"อัปเดตสถานะใบคำขอ {code} ไปยังระบบสินเชื่อแล้ว", response.Body));
             }
             catch (Exception ex)
             {
-                _MessageReturn.StatusCode = "500";
-                _MessageReturn.Message = ex.Message;
-                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
-                return _MessageReturn;
+                Log.Error(ex, "ส่งสถานะ CLOSED ซ้ำไม่สำเร็จ: {Code}", code);
+                return StatusCode(StatusCodes.Status500InternalServerError, ActionResultDto.Fail(
+                    "ทำรายการไม่สำเร็จ กรุณาลองใหม่อีกครั้ง หากยังไม่ได้ให้แจ้งทีมผู้ดูแล", ex.Message));
             }
         }
 
+        /// <summary>แถวที่ SP คืนมา — StatusDesc คือ request เดิมที่เคยส่งไปปลายทาง (JSON)</summary>
+        private class StatusReplayRow
+        {
+            public string? StatusDesc { get; set; }
+            public string? Accountno { get; set; }
+        }
+
+        [InvalidateSearchCache]
+        [RequireLogin]
         [HttpPost]
-        public async Task<MessageReturn> GetAddTNewSalesNewSGFinance([FromBody] C100StatusRq _C100StatusRq)
+        public async Task<IActionResult> GenEsignature([FromBody] C100StatusRq _C100StatusRq)
         {
+            var actor = HttpContext.Session.GetString("EMP_CODE");
+            var code = _C100StatusRq?.ApplicationCode;
+            Log.Information("สร้างลิงก์ e-signature ใหม่: {Code} โดย {Actor}", code, actor);
 
-            Log.Debug("GetAddTNewSalesNewSGFinance By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_C100StatusRq));
-            MessageReturn _MessageReturn = new MessageReturn();
-            GetOuCodeRespone _GetOuCodeRespone = new GetOuCodeRespone();
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return BadRequest(ActionResultDto.Fail("ไม่พบเลขที่ใบคำขอ กรุณาค้นหาใหม่อีกครั้ง"));
+            }
+
             try
             {
-                SqlConnection connection = new SqlConnection();
-                connection.ConnectionString = strConnString;
-                connection.Open();
-                SqlCommand sqlCommand;
-                string strSQL = DATABASEK2 + ".[GetSendEsignatureStatusSGFinance]";
-                sqlCommand = new SqlCommand(strSQL, connection);
-                sqlCommand.CommandType = CommandType.StoredProcedure;
-                sqlCommand.Parameters.AddWithValue("ApplicationCode", _C100StatusRq.ApplicationCode);
+                var response = await _api.PostJsonAsync("posservice", "/v1/LOS/SGF_ReCreateESig",
+                    new { applicationCode = code },
+                    $"สร้างลิงก์ e-signature ใหม่ [{code}] โดย {actor}");
 
-                SqlDataAdapter dtAdapter = new SqlDataAdapter();
-                dtAdapter.SelectCommand = sqlCommand;
-                DataTable dt = new DataTable();
-                dtAdapter.Fill(dt);
-                connection.Close();
-                sqlCommand.Parameters.Clear();
-
-                if (dt.Rows.Count > 0)
+                if (!response.Reached)
                 {
-                    Log.Debug(JsonConvert.SerializeObject(dt));
-
-                    GetSendEsignatureStatusSGFinance _requestBodyValue = JsonConvert.DeserializeObject<GetSendEsignatureStatusSGFinance>(dt.Rows[0]["StatusDesc"].ToString());
-
-                    
-                    var requestBody = new
-                    {
-                        ApplicationCode = _requestBodyValue.ApplicationCode,
-                        EsignatureConfirmStatus = _requestBodyValue.ApplicationCode,
-                        EsignatureConfirmDate = _requestBodyValue.ApplicationCode,
-                        ReceiveConfirmStatus = _requestBodyValue.ApplicationCode,
-                        ReceiveConfirmDate = _requestBodyValue.ApplicationCode
-                    };
-
-                    Log.Debug("API REQUEST : " + JsonConvert.SerializeObject(requestBody));
-
-
-                    using (HttpClient client = new HttpClient())
-                    {
-                        string jsonBody = JsonConvert.SerializeObject(requestBody);
-
-                        client.DefaultRequestHeaders.Add("apikey", ApiKey);
-                        client.DefaultRequestHeaders.Add("user", "DEV");
-
-                        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-
-                        HttpResponseMessage responseDevice;
-
-                        responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/api/v1/SendEsignatureStatus", content);
-
-
-                        int DeviceStatusCode = (int)responseDevice.StatusCode;
-
-                        Log.Debug("API RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
-
-                        if (responseDevice.IsSuccessStatusCode)
-                        {
-                            var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
-
-                            _MessageReturn = JsonConvert.DeserializeObject<MessageReturn>(jsonResponseDevice);
-                        }
-                    }
+                    return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
+                        "ตอนนี้ติดต่อระบบสัญญาอิเล็กทรอนิกส์ไม่ได้ กรุณาลองใหม่อีกครั้งในอีกสักครู่", response.TransportError));
                 }
-                //}
-                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
-                return _MessageReturn;
+
+                if (!response.IsSuccess)
+                {
+                    return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
+                        "ระบบสัญญาอิเล็กทรอนิกส์ไม่รับรายการนี้ ลิงก์ลงนามใหม่จึงยังไม่ถูกสร้าง", response.Body));
+                }
+
+                return Ok(ActionResultDto.Success(
+                    $"สร้างลิงก์ลงนามใหม่ให้ใบคำขอ {code} แล้ว ลูกค้าจะได้รับลิงก์ใหม่", response.Body));
             }
             catch (Exception ex)
             {
-                _MessageReturn.StatusCode = "500";
-                _MessageReturn.Message = ex.Message;
-                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_MessageReturn));
-                return _MessageReturn;
+                Log.Error(ex, "สร้างลิงก์ e-signature ใหม่ไม่สำเร็จ: {Code}", code);
+                return StatusCode(StatusCodes.Status500InternalServerError, ActionResultDto.Fail(
+                    "ทำรายการไม่สำเร็จ กรุณาลองใหม่อีกครั้ง หากยังไม่ได้ให้แจ้งทีมผู้ดูแล", ex.Message));
             }
         }
 
-        public async Task<RegisIMEIRespone> RegisIMEI([FromBody] GetApplication _GetApplication)
+        [RequireLogin]
+        [InvalidateSearchCache]
+        [HttpPost]
+        public async Task<IActionResult> GetAddTNewSalesNewSGFinance([FromBody] C100StatusRq _C100StatusRq)
         {
-            Log.Debug("RegisIMEI By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_GetApplication));
-            RegisIMEIRespone _RegisIMEIRespone = new RegisIMEIRespone();
+            var actor = HttpContext.Session.GetString("EMP_CODE");
+            var code = _C100StatusRq?.ApplicationCode;
+            Log.Information("ส่ง NewSale ซ้ำ: {Code} โดย {Actor}", code, actor);
+
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return BadRequest(ActionResultDto.Fail("ไม่พบเลขที่ใบคำขอ กรุณาค้นหาใหม่อีกครั้ง"));
+            }
+
             try
             {
-                GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
+                // SP ดึง "คำขอเดิมที่เคยส่งไปปลายทาง" ออกมาจาก log เพื่อส่งซ้ำ
+                string statusDesc;
+                using (var connection = new SqlConnection(strConnString))
+                {
+                    statusDesc = (await connection.QueryAsync<string>(new CommandDefinition(
+                        $"{DATABASEK2}.[GetSendEsignatureStatusSGFinance]",
+                        new { ApplicationCode = code },
+                        commandType: CommandType.StoredProcedure,
+                        commandTimeout: 60))).FirstOrDefault();
+                }
 
+                if (string.IsNullOrWhiteSpace(statusDesc))
+                {
+                    return NotFound(ActionResultDto.Fail(
+                        $"ใบคำขอ {code} ยังไม่มีรายการขายที่ยืนยันการรับสินค้าแล้ว จึงยังส่งซ้ำไม่ได้"));
+                }
+
+                var original = JsonConvert.DeserializeObject<GetSendEsignatureStatusSGFinance>(statusDesc);
+
+                // เดิมโค้ดใส่ ApplicationCode ทับลงไปในทั้ง 4 ฟิลด์ ปลายทางจึงได้ค่าขยะ
+                // เช่น EsignatureConfirmStatus = "911-2502-00086" แทนที่จะเป็น "TRUE"
+                // ที่ถูกคือส่งค่าเดิมกลับไปตามที่ SP ดึงมา
                 var requestBody = new
                 {
-                    SerrialNo = _GetApplicationRespone.ProductSerialNo,
-                    APPLICATION_CODE = _GetApplicationRespone.ApplicationCode,
-                    Brand = _GetApplicationRespone.ProductBrandName
+                    ApplicationCode = original.ApplicationCode,
+                    EsignatureConfirmStatus = original.EsignatureConfirmStatus,
+                    EsignatureConfirmDate = original.EsignatureConfirmDate,
+                    ReceiveConfirmStatus = original.ReceiveConfirmStatus,
+                    ReceiveConfirmDate = original.ReceiveConfirmDate
                 };
 
-                using (HttpClient client = new HttpClient())
+                var response = await _api.PostJsonAsync("esig", "/sgesig/api/v1/SendEsignatureStatus",
+                    requestBody, $"ส่ง NewSale ซ้ำ [{code}] โดย {actor}");
+
+                if (!response.Reached)
                 {
-                    string jsonBody = JsonConvert.SerializeObject(requestBody);
-
-                    client.DefaultRequestHeaders.Add("apikey", ApiKey);
-                    client.DefaultRequestHeaders.Add("user", "DEV");
-
-                    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                    HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/RegisIMEI", content);
-                    int DeviceStatusCode = (int)responseDevice.StatusCode;
-                    Log.Debug("API RETURN : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
-                    if (responseDevice.IsSuccessStatusCode)
-                    {
-
-                        if (_GetApplicationRespone.ProductBrandName.Trim().ToUpper() == "OPPO")
-                        {
-                            float new_loan = float.Parse(_GetApplicationRespone.Cash) - float.Parse(_GetApplicationRespone.DownPayment);
-                            LendingInfoRq lendingInfoRq = new LendingInfoRq();
-                            lendingInfoRq.ApplicationCode = _GetApplication.ApplicationCode;
-                            lendingInfoRq.application_date = _GetApplicationRespone.ApplicationDate;
-                            lendingInfoRq.product_serial = _GetApplicationRespone.ProductSerialNo;
-                            lendingInfoRq.flat_rate = _GetApplicationRespone.InterestPercent;
-                            lendingInfoRq.cash_price = _GetApplicationRespone.Cash;
-                            lendingInfoRq.down_payment = ""; //%ดาวน์
-                            lendingInfoRq.down_amount = _GetApplicationRespone.DownPayment.ToString();
-                            lendingInfoRq.new_loan = new_loan.ToString();
-                            lendingInfoRq.contract_term = _GetApplicationRespone.InstallmentPeriod.ToString();
-                            lendingInfoRq.discount = _GetApplicationRespone.Discount;
-                            await LendingInfo(lendingInfoRq);
-                        }
-
-                        var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
-
-                        _RegisIMEIRespone = JsonConvert.DeserializeObject<RegisIMEIRespone>(jsonResponseDevice);
-
-                        if (_GetApplicationRespone.ApplicationRef.Trim() == "SEAMLESS")
-                        {
-                            CheckRegisterIMEIRq checkRegisterIMEIRq = new CheckRegisterIMEIRq();
-                            checkRegisterIMEIRq.AppOrderNo = _GetApplication.ApplicationCode;
-                            CheckRegisterIMEI(checkRegisterIMEIRq);
-                        }
-
-                    }
+                    return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
+                        "ตอนนี้ติดต่อระบบสัญญาอิเล็กทรอนิกส์ไม่ได้ กรุณาลองใหม่อีกครั้งในอีกสักครู่", response.TransportError));
                 }
 
-                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_RegisIMEIRespone));
-                return _RegisIMEIRespone;
+                if (!response.IsSuccess)
+                {
+                    return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
+                        "ระบบสัญญาอิเล็กทรอนิกส์ไม่รับรายการนี้ รายการขายจึงยังไม่ถูกส่ง", response.Body));
+                }
+
+                return Ok(ActionResultDto.Success(
+                    $"ส่งรายการขายของใบคำขอ {code} ไปยังระบบสัญญาอิเล็กทรอนิกส์แล้ว", response.Body));
             }
             catch (Exception ex)
             {
-                _RegisIMEIRespone.statusCode = ex.Message;
-                Log.Debug("RETURN : " + JsonConvert.SerializeObject(_RegisIMEIRespone));
-                return _RegisIMEIRespone;
+                Log.Error(ex, "ส่ง NewSale ซ้ำไม่สำเร็จ: {Code}", code);
+                return StatusCode(StatusCodes.Status500InternalServerError, ActionResultDto.Fail(
+                    "ทำรายการไม่สำเร็จ กรุณาลองใหม่อีกครั้ง หากยังไม่ได้ให้แจ้งทีมผู้ดูแล", ex.Message));
+            }
+        }
+
+        [RequireLogin]
+        [InvalidateSearchCache]
+        [HttpPost]
+        public async Task<IActionResult> RegisIMEI([FromBody] GetApplication _GetApplication)
+        {
+            var actor = HttpContext.Session.GetString("EMP_CODE");
+            var code = _GetApplication?.ApplicationCode;
+            Log.Information("ลงทะเบียนเครื่อง: {Code} โดย {Actor}", code, actor);
+
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return BadRequest(ActionResultDto.Fail("ไม่พบเลขที่ใบคำขอ กรุณาค้นหาใหม่อีกครั้ง"));
+            }
+
+            try
+            {
+                var app = await GetApplication(_GetApplication);
+                if (app == null || string.IsNullOrWhiteSpace(app.ProductSerialNo))
+                {
+                    return NotFound(ActionResultDto.Fail(
+                        $"ใบคำขอ {code} ยังไม่มีหมายเลขเครื่อง (Serial/IMEI) จึงยังลงทะเบียนไม่ได้"));
+                }
+
+                var response = await _api.PostJsonAsync("esig", "/sgesig/Service/RegisIMEI", new
+                {
+                    SerrialNo = app.ProductSerialNo,
+                    APPLICATION_CODE = app.ApplicationCode,
+                    Brand = app.ProductBrandName
+                }, $"ลงทะเบียนเครื่อง [{code}] โดย {actor}");
+
+                if (!response.Reached)
+                {
+                    return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
+                        "ตอนนี้ติดต่อระบบลงทะเบียนเครื่องไม่ได้ กรุณาลองใหม่อีกครั้งในอีกสักครู่", response.TransportError));
+                }
+
+                if (!response.IsSuccess)
+                {
+                    return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
+                        "ระบบลงทะเบียนเครื่องไม่รับรายการนี้ เครื่องจึงยังไม่ถูกลงทะเบียน", response.Body));
+                }
+
+                // ปลายทางตอบ HTTP 200 เสมอ ไม่ว่างานจะสำเร็จหรือไม่ ผลจริงอยู่ในฟิลด์ statusCode
+                // ซึ่งเป็น "ข้อความ JSON ซ้อนอยู่ข้างใน" อีกชั้น ต้องแกะออกมาถึงจะรู้ผล
+                var outcome = ParseRegisResult(response.Body);
+
+                if (!outcome.Ok)
+                {
+                    // ไม่ใช่ข้อผิดพลาดของระบบ แต่เป็น "ทำรายการไม่สำเร็จ" ที่ปลายทางบอกเหตุผลมา
+                    return Ok(ActionResultDto.Fail(outcome.Message, response.Body));
+                }
+
+                // งานต่อพ่วงหลังลงทะเบียนสำเร็จ — ล้มเหลวตรงนี้ไม่ทำให้การลงทะเบียนเป็นโมฆะ
+                await RunPostRegisStepsAsync(_GetApplication, app);
+
+                return Ok(ActionResultDto.Success(outcome.Message, response.Body));
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "ลงทะเบียนเครื่องไม่สำเร็จ: {Code}", code);
+                return StatusCode(StatusCodes.Status500InternalServerError, ActionResultDto.Fail(
+                    "ทำรายการไม่สำเร็จ กรุณาลองใหม่อีกครั้ง หากยังไม่ได้ให้แจ้งทีมผู้ดูแล", ex.Message));
+            }
+        }
+
+        /// <summary>
+        /// ซ่อมรายการที่มีสัญญาซ้ำ — เปลี่ยนเลขที่เอกสารของใบที่ยังไม่ลงนามเสร็จ (signedStatus ไม่ใช่ COMP-Done)
+        /// ให้เติม _D ต่อท้าย เพื่อให้เหลือสัญญาที่ผูกกับใบคำขอเพียงใบเดียว
+        ///
+        /// ข้อควรระวังที่เจอจากข้อมูลจริง: ถ้าเติม _D ให้ทุกแถวพร้อมกัน แถวเหล่านั้นจะได้ชื่อเดียวกันหมด
+        /// แล้วกลายเป็นรายการซ้ำชุดใหม่ (เกิดขึ้นแล้วกับ 936-2607-02033_D และ 881-2607-00006_D)
+        /// จึงต้องไล่เลขต่อท้ายให้ไม่ชนกัน และตรวจก่อนว่าชื่อใหม่ยังไม่มีใครใช้
+        /// </summary>
+        [RequireLogin]
+        [InvalidateSearchCache]
+        [HttpPost]
+        public async Task<IActionResult> FixDuplicateContract([FromBody] C100StatusRq request)
+        {
+            var actor = HttpContext.Session.GetString("EMP_CODE");
+            var code = request?.ApplicationCode;
+            Log.Information("ซ่อมสัญญาซ้ำ: {Code} โดย {Actor}", code, actor);
+
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return BadRequest(ActionResultDto.Fail("ไม่พบเลขที่ใบคำขอ กรุณาค้นหาใหม่อีกครั้ง"));
+            }
+
+            // รับเฉพาะตัวอักษร ตัวเลข ขีดกลาง และขีดล่าง — ค่านี้ถูกนำไปประกอบเป็นคำสั่ง SQL
+            if (!System.Text.RegularExpressions.Regex.IsMatch(code, @"^[A-Za-z0-9_\-]{1,60}$"))
+            {
+                return BadRequest(ActionResultDto.Fail("เลขที่ใบคำขอไม่ถูกต้อง"));
+            }
+
+            try
+            {
+                using var connection = new SqlConnection(strConnString);
+                await connection.OpenAsync();
+
+                // ใช้ค่าคงที่แทนพารามิเตอร์ เพราะเงื่อนไขแบบพารามิเตอร์ส่งข้ามเซิร์ฟเวอร์ไปไม่ได้
+                // (code ผ่านการตรวจรูปแบบมาแล้วด้านบน)
+                var rows = (await connection.QueryAsync<DuplicateContractRow>(new CommandDefinition($@"
+                    SELECT id, documentno, signedStatus, createdAt
+                    FROM {SGCESIGNATURE}.[contracts] WITH (NOLOCK)
+                    WHERE documentno = N'{code}'
+                    ORDER BY createdAt DESC, id DESC", commandTimeout: 180))).ToList();
+
+                if (rows.Count <= 1)
+                {
+                    return Ok(ActionResultDto.Fail(
+                        $"ใบคำขอ {code} มีสัญญาเพียงใบเดียว ไม่ได้ซ้ำ จึงไม่ต้องแก้ไข"));
+                }
+
+                // แถวที่ต้องเปลี่ยนชื่อ = ที่ยังไม่ลงนามเสร็จ
+                var toRename = rows.Where(r => !string.Equals(r.signedStatus, "COMP-Done", StringComparison.OrdinalIgnoreCase)).ToList();
+
+                if (toRename.Count == 0)
+                {
+                    return Ok(ActionResultDto.Fail(
+                        $"ใบคำขอ {code} มีสัญญาที่ลงนามเสร็จแล้ว {rows.Count} ใบ ระบบไม่แก้ให้อัตโนมัติ กรุณาให้ทีมผู้ดูแลตรวจสอบก่อน"));
+                }
+
+                // ถ้าจะเปลี่ยนชื่อทุกใบ จะไม่เหลือสัญญาผูกกับใบคำขอเลย — เก็บใบล่าสุดไว้หนึ่งใบ
+                if (toRename.Count == rows.Count)
+                {
+                    toRename = toRename.Skip(1).ToList();
+                }
+
+                var used = await ExistingSuffixesAsync(connection, code);
+                var renamed = new List<string>();
+                foreach (var row in toRename)
+                {
+                    var newNo = NextFreeDocumentNo(used, code);
+
+                    var affected = await connection.ExecuteAsync(new CommandDefinition($@"
+                        UPDATE {SGCESIGNATURE}.[contracts]
+                        SET documentno = N'{newNo}'
+                        WHERE id = {row.id} AND documentno = N'{code}'", commandTimeout: 180));
+
+                    if (affected == 1)
+                    {
+                        renamed.Add($"id {row.id} ({row.signedStatus}) → {newNo}");
+                        Log.Information("ซ่อมสัญญาซ้ำ: {Code} id={Id} status={Status} เปลี่ยนเป็น {NewNo} โดย {Actor}",
+                            code, row.id, row.signedStatus, newNo, actor);
+                    }
+                }
+
+                if (renamed.Count == 0)
+                {
+                    return Ok(ActionResultDto.Fail("ไม่มีอะไรถูกแก้ไข ข้อมูลอาจถูกแก้ไปแล้วโดยคนอื่นระหว่างนี้ กรุณาค้นหาใหม่อีกครั้ง"));
+                }
+
+                return Ok(ActionResultDto.Success(
+                    $"แก้สัญญาซ้ำของใบคำขอ {code} แล้ว — ย้ายสัญญาที่ยังไม่ลงนาม {renamed.Count} ใบออกไป เหลือสัญญาที่ใช้งานจริง 1 ใบ",
+                    string.Join(" · ", renamed)));
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "ซ่อมสัญญาซ้ำไม่สำเร็จ: {Code}", code);
+                return StatusCode(StatusCodes.Status500InternalServerError, ActionResultDto.Fail(
+                    "แก้สัญญาซ้ำไม่สำเร็จ กรุณาลองใหม่อีกครั้ง หากยังไม่ได้ให้แจ้งทีมผู้ดูแล", ex.Message));
+            }
+        }
+
+        /// <summary>
+        /// อ่านว่าเลขที่เอกสารแบบ {code}_D, _D2, ... ตัวไหนถูกใช้ไปแล้วบ้าง — ครั้งเดียวจบ
+        ///
+        /// ต้องเขียนค่าลงไปในคำสั่งตรง ๆ แทนการใช้พารามิเตอร์ เพราะตาราง contracts อยู่คนละเซิร์ฟเวอร์
+        /// และเงื่อนไขที่เป็นพารามิเตอร์จะถูกส่งข้ามไปประมวลผลฝั่งโน้นไม่ได้ กลายเป็นลากตารางทั้งก้อน
+        /// (1.76 ล้านแถว) มาจนหมดเวลา — ส่วนค่าคงที่ส่งข้ามไปได้ ใช้เวลาไม่ถึงวินาที
+        ///
+        /// ปลอดภัยเพราะ code ถูกตรวจรูปแบบก่อนแล้วว่าเป็นตัวอักษร/ตัวเลข/ขีดเท่านั้น
+        /// </summary>
+        private async Task<HashSet<string>> ExistingSuffixesAsync(SqlConnection connection, string code)
+        {
+            var candidates = Enumerable.Range(1, 50)
+                .Select(i => i == 1 ? $"{code}_D" : $"{code}_D{i}")
+                .ToList();
+
+            var inList = string.Join(",", candidates.Select(c => $"N'{c}'"));
+
+            var used = await connection.QueryAsync<string>(new CommandDefinition($@"
+                SELECT documentno FROM {SGCESIGNATURE}.[contracts] WITH (NOLOCK)
+                WHERE documentno IN ({inList})", commandTimeout: 180));
+
+            return new HashSet<string>(used, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static string NextFreeDocumentNo(HashSet<string> used, string code)
+        {
+            for (int i = 1; i <= 50; i++)
+            {
+                var candidate = i == 1 ? $"{code}_D" : $"{code}_D{i}";
+                if (used.Add(candidate)) return candidate;
+            }
+            throw new InvalidOperationException($"หาเลขที่เอกสารว่างสำหรับ {code} ไม่ได้");
+        }
+
+        private class DuplicateContractRow
+        {
+            public long id { get; set; }
+            public string? documentno { get; set; }
+            public string? signedStatus { get; set; }
+            // คอลัมน์นี้เป็น datetimeoffset ไม่ใช่ datetime ธรรมดา
+            public DateTimeOffset? createdAt { get; set; }
+        }
+
+        /// <summary>
+        /// แกะผลจริงออกจากคำตอบของระบบลงทะเบียนเครื่อง
+        ///
+        /// คำตอบมีหน้าตาแบบนี้ — ผลจริงถูกใส่เป็นข้อความ JSON ซ้อนอยู่ในฟิลด์ statusCode อีกชั้น
+        ///   {"statusCode":"{\"status\":\"401\",\"message\":\"... ยังทำรายการไม่สมบูรณ์\"}"}
+        /// และปลายทางตอบ HTTP 200 เสมอ ไม่ว่าจะสำเร็จหรือไม่
+        /// </summary>
+        private static (bool Ok, string Message) ParseRegisResult(string body)
+        {
+            try
+            {
+                var outer = JObject.Parse(body);
+                var inner = outer["statusCode"]?.ToString();
+                if (string.IsNullOrWhiteSpace(inner))
+                {
+                    return (false, "ระบบลงทะเบียนเครื่องตอบกลับมาในรูปแบบที่ไม่คาดคิด กรุณาแจ้งทีมผู้ดูแล");
+                }
+
+                // บางกรณีปลายทางส่งเป็นข้อความสั้น ๆ ไม่ใช่ JSON
+                if (!inner.TrimStart().StartsWith("{"))
+                {
+                    var ok = inner.Equals("PASS", StringComparison.OrdinalIgnoreCase);
+                    return (ok, ok ? "ลงทะเบียนเครื่องสำเร็จ" : $"ลงทะเบียนไม่สำเร็จ: {inner}");
+                }
+
+                var detail = JObject.Parse(inner);
+                var status = detail["status"]?.ToString() ?? "";
+                var message = detail["message"]?.ToString();
+                var deviceStatus = detail["deviceStatus"]?.ToString();
+
+                bool success = status.StartsWith("2", StringComparison.Ordinal);
+
+                if (string.IsNullOrWhiteSpace(message))
+                {
+                    message = success ? "ลงทะเบียนเครื่องสำเร็จ" : "ลงทะเบียนไม่สำเร็จ";
+                }
+                else if (!success)
+                {
+                    message = $"ลงทะเบียนไม่สำเร็จ: {message}";
+                }
+
+                if (!string.IsNullOrWhiteSpace(deviceStatus))
+                {
+                    message += $" · สถานะเครื่อง: {deviceStatus}";
+                }
+
+                return (success, message);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "อ่านคำตอบของระบบลงทะเบียนเครื่องไม่ได้: {Body}", body);
+                return (false, "ระบบลงทะเบียนเครื่องตอบกลับมาในรูปแบบที่ไม่คาดคิด กรุณาแจ้งทีมผู้ดูแล");
+            }
+        }
+
+        /// <summary>งานต่อพ่วงหลังลงทะเบียนเครื่องสำเร็จ (OPPO ต้องส่งข้อมูลสินเชื่อ / SEAMLESS ต้องเช็คซ้ำ)</summary>
+        private async Task RunPostRegisStepsAsync(GetApplication request, GetApplicationRespone app)
+        {
+            try
+            {
+                if (string.Equals(app.ProductBrandName?.Trim(), "OPPO", StringComparison.OrdinalIgnoreCase))
+                {
+                    float.TryParse(app.Cash, out var cash);
+                    float.TryParse(app.DownPayment, out var down);
+
+                    await LendingInfo(new LendingInfoRq
+                    {
+                        ApplicationCode = request.ApplicationCode,
+                        application_date = app.ApplicationDate,
+                        product_serial = app.ProductSerialNo,
+                        flat_rate = app.InterestPercent,
+                        cash_price = app.Cash,
+                        down_payment = "",
+                        down_amount = app.DownPayment?.ToString(),
+                        new_loan = (cash - down).ToString(),
+                        contract_term = app.InstallmentPeriod?.ToString(),
+                        discount = app.Discount
+                    });
+                }
+
+                if (string.Equals(app.ApplicationRef?.Trim(), "SEAMLESS", StringComparison.OrdinalIgnoreCase))
+                {
+                    // เดิมเป็น async void แล้วเรียกแบบไม่รอผล ถ้าพังจะหลุดออกนอก request และทำให้ระบบล้มได้
+                    await CheckRegisterIMEI(new CheckRegisterIMEIRq { AppOrderNo = request.ApplicationCode });
+                }
+            }
+            catch (Exception ex)
+            {
+                // ลงทะเบียนสำเร็จไปแล้ว งานต่อพ่วงล้มไม่ควรทำให้ผู้ใช้เข้าใจว่าลงทะเบียนไม่สำเร็จ
+                Log.Error(ex, "งานต่อพ่วงหลังลงทะเบียนเครื่องไม่สำเร็จ: {Code}", request.ApplicationCode);
             }
         }
 
@@ -1438,9 +2024,11 @@ DROP TABLE #PAYMENT_TEMP;
 
         }
 
+        [InvalidateSearchCache]
+        [RequireLogin]
         [HttpPost]
         [Route("CheckRegisterIMEI")]
-        public async void CheckRegisterIMEI(CheckRegisterIMEIRq checkRegisterIMEIRq)
+        public async Task CheckRegisterIMEI(CheckRegisterIMEIRq checkRegisterIMEIRq)
         {
             GetApplicationRespone _GetApplicationRespone = new GetApplicationRespone();
             DataTable dt = new DataTable();
@@ -1484,7 +2072,8 @@ DROP TABLE #PAYMENT_TEMP;
 
                 if (dt.Rows.Count > 0)
                 {
-                    Log.Debug(JsonConvert.SerializeObject(dt));
+                    // เดิม log ทั้ง DataTable ซึ่งมีเลขบัตรประชาชน/เบอร์โทรของลูกค้าลงไฟล์ (ระดับ Debug เปิดบน prod)
+                    Log.Debug("query returned {RowCount} row(s)", dt.Rows.Count);
 
                     if (dt.Rows[0]["RegisterIMEI"].ToString() != "")
                     {
@@ -1514,6 +2103,8 @@ DROP TABLE #PAYMENT_TEMP;
             }
         }
 
+        [InvalidateSearchCache]
+        [RequireLogin]
         [HttpPost]
         [Route("LendingInfo")]
         public async Task LendingInfo([FromBody] LendingInfoRq _LendingInfoRq)
@@ -1541,6 +2132,8 @@ DROP TABLE #PAYMENT_TEMP;
            
         }
 
+        [InvalidateSearchCache]
+        [RequireLogin]
         [HttpPost]
         [Route("CancelledSGB")]
         public async Task CancelledSGB([FromBody] LendingInfoRq _LendingInfoRq)
@@ -1568,6 +2161,7 @@ DROP TABLE #PAYMENT_TEMP;
 
         }
 
+        [RequireLogin]
         [HttpPost]
         [Route("SendEmail")]
         public async Task<SendEmailRespone> SendEmail([FromBody] SendEmailRq sendEmailRq)
@@ -1641,6 +2235,7 @@ DROP TABLE #PAYMENT_TEMP;
             }
         }
         
+        [RequireLogin]
         public async Task<SGBCancelRespone> SGBCancel([FromBody] GetApplication _GetApplication)
         {
             Log.Debug("SGBCancel By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_GetApplication));
@@ -1685,6 +2280,8 @@ DROP TABLE #PAYMENT_TEMP;
             }
         }
 
+        [InvalidateSearchCache]
+        [RequireLogin]
         public async Task<RegisIMEIRespone> LinkPayment([FromBody] GetApplication _GetApplication)
         {
             RegisIMEIRespone _RegisIMEIRespone = new RegisIMEIRespone();
@@ -1741,6 +2338,8 @@ DROP TABLE #PAYMENT_TEMP;
             public string CANCEL_USER { get; set; }
         }
 
+        [InvalidateSearchCache]
+        [RequireLogin]
         [HttpPost]
         public ModelResult PostBypassCustomer(BypassCustomer _bypassCustomer)
         {
@@ -1779,6 +2378,8 @@ DROP TABLE #PAYMENT_TEMP;
 
         }
 
+        [InvalidateSearchCache]
+        [RequireLogin]
         [HttpPost]
         public ModelResult PostBypassIMEI(BypassImei _bypassImei)
         {
@@ -1817,6 +2418,8 @@ DROP TABLE #PAYMENT_TEMP;
 
         }
 
+        [InvalidateSearchCache]
+        [RequireLogin]
         [HttpPost]
         public ModelResult PostChangeIMEI(ChangeImei _changeImei)
         {
