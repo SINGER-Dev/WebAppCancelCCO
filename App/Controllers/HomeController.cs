@@ -1009,7 +1009,7 @@ namespace App.Controllers
                     }
 
                     if (stepCancel != null && stepCancel.Status == "pending") steps.Ok(stepCancel);
-                    stepNotify = steps.Begin("แจ้งสถานะไปยังระบบสัญญาอิเล็กทรอนิกส์");
+                    stepNotify = steps.Begin("แจ้งสถานะไปยัง e-contract");
 
                    
 
@@ -1280,8 +1280,8 @@ namespace App.Controllers
                     steps.Ok(stepSgb);
                 }
 
-                // ---- 8. แจ้งสถานะกลับไปยังระบบสัญญาอิเล็กทรอนิกส์ ----
-                var stepNotify = steps.Begin("แจ้งสถานะไปยังระบบสัญญาอิเล็กทรอนิกส์");
+                // ---- 8. แจ้งสถานะกลับไปยัง e-contract ----
+                var stepNotify = steps.Begin("แจ้งสถานะไปยัง e-contract");
                 var requestBody = new
                 {
                     applicationCode = _GetApplicationRespone.ApplicationCode,
@@ -1296,7 +1296,7 @@ namespace App.Controllers
 
                 if (!notify.Reached)
                 {
-                    steps.Failed(stepNotify, "ติดต่อระบบสัญญาอิเล็กทรอนิกส์ไม่ได้ — " + notify.TransportError);
+                    steps.Failed(stepNotify, "ติดต่อ e-contract ไม่ได้ — " + notify.TransportError);
                 }
                 else if (!notify.IsSuccess)
                 {
@@ -1718,13 +1718,13 @@ namespace App.Controllers
                 if (!response.Reached)
                 {
                     return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
-                        "ตอนนี้ติดต่อระบบสัญญาอิเล็กทรอนิกส์ไม่ได้ กรุณาลองใหม่อีกครั้งในอีกสักครู่", response.TransportError));
+                        "ตอนนี้ติดต่อ e-contract ไม่ได้ กรุณาลองใหม่อีกครั้งในอีกสักครู่", response.TransportError));
                 }
 
                 if (!response.IsSuccess)
                 {
                     return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
-                        "ระบบสัญญาอิเล็กทรอนิกส์ไม่รับรายการนี้ ลิงก์ลงนามใหม่จึงยังไม่ถูกสร้าง", response.Body));
+                        "e-contract ไม่รับรายการนี้ ลิงก์ลงนามใหม่จึงยังไม่ถูกสร้าง", response.Body));
                 }
 
                 return Ok(ActionResultDto.Success(
@@ -1793,17 +1793,17 @@ namespace App.Controllers
                 if (!response.Reached)
                 {
                     return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
-                        "ตอนนี้ติดต่อระบบสัญญาอิเล็กทรอนิกส์ไม่ได้ กรุณาลองใหม่อีกครั้งในอีกสักครู่", response.TransportError));
+                        "ตอนนี้ติดต่อ e-contract ไม่ได้ กรุณาลองใหม่อีกครั้งในอีกสักครู่", response.TransportError));
                 }
 
                 if (!response.IsSuccess)
                 {
                     return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
-                        "ระบบสัญญาอิเล็กทรอนิกส์ไม่รับรายการนี้ รายการขายจึงยังไม่ถูกส่ง", response.Body));
+                        "e-contract ไม่รับรายการนี้ รายการขายจึงยังไม่ถูกส่ง", response.Body));
                 }
 
                 return Ok(ActionResultDto.Success(
-                    $"ส่งรายการขายของใบคำขอ {code} ไปยังระบบสัญญาอิเล็กทรอนิกส์แล้ว", response.Body));
+                    $"ส่งรายการขายของใบคำขอ {code} ไปยัง e-contract แล้ว", response.Body));
             }
             catch (Exception ex)
             {
