@@ -63,10 +63,16 @@
                     });
 
                 },
-                error: function (xhr, status, error) {
-                    console.error(error);
+                error: function (xhr) {
+                    // เดิมเงียบสนิท ค้นหาไม่ขึ้นแล้วผู้ใช้ไม่รู้ว่าเกิดอะไรขึ้น
+                    if (xhr.status === 401) { window.location.href = '/Login'; return; }
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'ค้นหาไม่สำเร็จ',
+                        text: 'ตอนนี้อ่านข้อมูลไม่ได้ กรุณาลองใหม่อีกครั้ง หากยังไม่ได้ให้แจ้งทีมผู้ดูแล'
+                    });
                 }
-            }); 
+            });
         });
 
         $("#btnFetch2").click(function (e) { runCancel(e, '/Home/UpdateDataCancelCLOSED', 'ยกเลิกใบคำขอแบบข้ามวัน'); });
@@ -148,57 +154,15 @@
             }
             else {
 
-                Swal.fire({
-                    title: "ยืนยันการ By Pass Customer " + $('#IdCard').val(),
-                    showCancelButton: true,
-                    confirmButtonText: "ยืนยัน",
-                    cancelButtonText: "ออก",
-                }).then((result) => {
-                    /* Read more about isConfirmed, isDenied below */
-                    if (result.isConfirmed) {
-
-
-                        var formData = $("#FormBypassCustomer").serialize(); // Serialize form data
-                        $.ajax({
-                            url: "/Home/PostBypassCustomer", // Action URL
-                            type: "POST", // Method (POST in this case)
-                            data: formData,
-                            success: function (result) {
-                                if (result.status == "Success") {
-                                    Swal.fire({
-                                        title: "By Pass Customer",
-                                        text: result.message,
-                                        icon: "success"
-                                    }).then(function () {
-                                        // Redirect the user
-                                        window.location.href = "/";
-                                    });
-                                }
-                                else if (result.status == "BadRequest") {
-                                    Swal.fire({
-                                        title: "By Pass Customer",
-                                        text: result.message,
-                                        icon: "error"
-                                    }).then(function () {
-                                        // Redirect the user
-                                        window.location.href = "/";
-                                    });
-                                }
-                                else {
-                                    Swal.fire({
-                                        icon: "error",
-                                        title: "Oops...",
-                                        text: result
-                                    }).then(function () {
-                                        location.reload();
-                                    });
-                                }
-                            },
-                            error: function (xhr, status, error) {
-                                console.error(error);
-                            }
-                        });
-                    }
+                runFixAction({
+                    url: '/Home/PostBypassCustomer',
+                    form: '#FormBypassCustomer',
+                    body: { ApplicationCode: $.trim($('#IdCard').val()) },
+                    confirmTitle: 'ยกเว้นการตรวจสอบลูกค้า',
+                    confirmDetail: 'ระบบจะข้ามการตรวจสอบลูกค้ารายนี้ เพื่อให้ทำรายการต่อได้',
+                    successTitle: 'ยกเว้นการตรวจสอบลูกค้าเรียบร้อย',
+                    successHint: 'กลับไปหน้าค้นหาเพื่อทำรายการต่อได้เลย',
+                    goHomeOnSuccess: true
                 });
             }
         });
@@ -218,57 +182,15 @@
             }
             else {
 
-                Swal.fire({
-                    title: "ยืนยันการ By Pass IMEI " + $('#Imei').val(),
-                    showCancelButton: true,
-                    confirmButtonText: "ยืนยัน",
-                    cancelButtonText: "ออก",
-                }).then((result) => {
-                    /* Read more about isConfirmed, isDenied below */
-                    if (result.isConfirmed) {
-
-
-                        var formData = $("#FormBypassIMEI").serialize(); // Serialize form data
-                        $.ajax({
-                            url: "/Home/PostBypassIMEI", // Action URL
-                            type: "POST", // Method (POST in this case)
-                            data: formData,
-                            success: function (result) {
-                                if (result.status == "Success") {
-                                    Swal.fire({
-                                        title: "By Pass IMEI",
-                                        text: result.message,
-                                        icon: "success"
-                                    }).then(function () {
-                                        // Redirect the user
-                                        window.location.href = "/";
-                                    });
-                                }
-                                else if (result.status == "BadRequest") {
-                                    Swal.fire({
-                                        title: "By Pass IMEI",
-                                        text: result.message,
-                                        icon: "error"
-                                    }).then(function () {
-                                        // Redirect the user
-                                        window.location.href = "/";
-                                    });
-                                }
-                                else {
-                                    Swal.fire({
-                                        icon: "error",
-                                        title: "Oops...",
-                                        text: result
-                                    }).then(function () {
-                                        location.reload();
-                                    });
-                                }
-                            },
-                            error: function (xhr, status, error) {
-                                console.error(error);
-                            }
-                        });
-                    }
+                runFixAction({
+                    url: '/Home/PostBypassIMEI',
+                    form: '#FormBypassIMEI',
+                    body: { ApplicationCode: $.trim($('#Imei').val()) },
+                    confirmTitle: 'ยกเว้นการตรวจสอบเครื่อง',
+                    confirmDetail: 'ระบบจะข้ามการตรวจสอบหมายเลขเครื่องนี้ เพื่อให้ทำรายการต่อได้',
+                    successTitle: 'ยกเว้นการตรวจสอบเครื่องเรียบร้อย',
+                    successHint: 'กลับไปหน้าค้นหาเพื่อทำรายการต่อได้เลย',
+                    goHomeOnSuccess: true
                 });
             }
         });
@@ -288,57 +210,15 @@
             }
             else {
 
-                Swal.fire({
-                    title: "ยืนยันการเปลี่ยน IMEI " ,
-                    showCancelButton: true,
-                    confirmButtonText: "ยืนยัน",
-                    cancelButtonText: "ออก",
-                }).then((result) => {
-                    /* Read more about isConfirmed, isDenied below */
-                    if (result.isConfirmed) {
-
-
-                        var formData = $("#FormChangeIMEI").serialize(); // Serialize form data
-                        $.ajax({
-                            url: "/Home/PostChangeIMEI", // Action URL
-                            type: "POST", // Method (POST in this case)
-                            data: formData,
-                            success: function (result) {
-                                if (result.status == "Success") {
-                                    Swal.fire({
-                                        title: "Change IMEI",
-                                        text: result.message,
-                                        icon: "success"
-                                    }).then(function () {
-                                        // Redirect the user
-                                        window.location.href = "/";
-                                    });
-                                }
-                                else if (result.status == "BadRequest") {
-                                    Swal.fire({
-                                        title: "Change IMEI",
-                                        text: result.message,
-                                        icon: "error"
-                                    }).then(function () {
-                                        // Redirect the user
-                                        window.location.href = "/";
-                                    });
-                                }
-                                else {
-                                    Swal.fire({
-                                        icon: "error",
-                                        title: "Oops...",
-                                        text: result
-                                    }).then(function () {
-                                        location.reload();
-                                    });
-                                }
-                            },
-                            error: function (xhr, status, error) {
-                                console.error(error);
-                            }
-                        });
-                    }
+                runFixAction({
+                    url: '/Home/PostChangeIMEI',
+                    form: '#FormChangeIMEI',
+                    body: { ApplicationCode: $.trim($('#accNo').val()) },
+                    confirmTitle: 'เปลี่ยนหมายเลขเครื่อง',
+                    confirmDetail: 'ระบบจะเปลี่ยนหมายเลขเครื่องของสัญญานี้เป็น ' + $.trim($('#NewImei').val()),
+                    successTitle: 'เปลี่ยนหมายเลขเครื่องเรียบร้อย',
+                    successHint: 'กลับไปหน้าค้นหาเพื่อตรวจสอบรายการได้เลย',
+                    goHomeOnSuccess: true
                 });
             }
         });
@@ -395,10 +275,15 @@
                         });
                     }
 
-                    console.log(result);
                 },
-                error: function (xhr, status, error) {
-                    console.error(error);
+                error: function () {
+                    // เดิมเงียบสนิท ปุ่มค้างอยู่แบบ Loading... ตลอดไปเมื่อเรียกไม่ถึง server
+                    $('#btnLogin').prop('disabled', false).html('Login');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'เข้าสู่ระบบไม่สำเร็จ',
+                        text: 'ตอนนี้ติดต่อระบบไม่ได้ กรุณาลองใหม่อีกครั้งในอีกสักครู่'
+                    });
                 }
             });
         });
@@ -442,13 +327,17 @@
             // ระหว่างรอคำตอบจากระบบปลายทาง (บางเส้นใช้เวลาหลายวินาที) ต้องมีอะไรบอกว่ากำลังทำงาน
             var waiting = slipWaiting(opts, code);
 
-            $.ajax({
+            // ปุ่มในตารางส่งเป็น JSON ส่วนหน้าฟอร์ม (bypass/เปลี่ยนเครื่อง) ส่งเป็นฟอร์มตามเดิม
+            // รองรับทั้งสองแบบ จะได้ไม่ต้องแก้ทั้ง action และ model binding ฝั่ง server
+            var req = opts.form
+                ? { data: $(opts.form).serialize() }
+                : { contentType: 'application/json', data: JSON.stringify(opts.body) };
+
+            $.ajax($.extend({
                 url: opts.url,
                 type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify(opts.body),
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            }).done(function (res) {
+            }, req)).done(function (res) {
                 if (res && res.ok) {
                     showActionSuccess(opts, code, res);
                 } else {
@@ -591,9 +480,13 @@
             operation: opts.confirmTitle,
             badge: 'สำเร็จ',
             message: (res && res.message) || opts.successTitle,
-            hint: 'ระบบอัปเดตรายการในตารางให้แล้ว',
+            hint: opts.successHint || 'ระบบอัปเดตรายการในตารางให้แล้ว',
             detail: (res && res.detail) || ''
-        }, { confirmButtonText: 'เรียบร้อย' }).then(function () { reloadCurrentPage(); });
+        }, { confirmButtonText: 'เรียบร้อย' }).then(function () {
+            // หน้าฟอร์ม (bypass / เปลี่ยนเครื่อง) ไม่มีตารางให้รีเฟรช ให้กลับหน้าค้นหาแทน
+            if (opts.goHomeOnSuccess) { window.location.href = '/'; return; }
+            reloadCurrentPage();
+        });
     }
 
     function showActionResult(kind, opts, code, res) {
@@ -687,49 +580,15 @@
             });
 
             $(document).on('click', '.LinkPayment', function () {
-
-                var data = {
-                    ApplicationCode: $(this).data("applicationcode")
-                };
-
-                Swal.fire({
-                    title: "ยืนยันส่งลิงค์ชำระเงิน?",
-                    showCancelButton: true,
-                    confirmButtonText: "ยืนยัน",
-                    cancelButtonText: "ออก",
-                }).then((result) => {
-                    /* Read more about isConfirmed, isDenied below */
-                    if (result.isConfirmed) {
-
-                        var formData = $(this).serialize(); // Serialize form data
-                        $.ajax({
-                            url: "./Home/LinkPayment", // Action URL
-                            type: "POST", // Method (POST in this case)
-                            contentType: 'application/json',
-                            data: JSON.stringify(data),
-                            success: function (result) {
-                                if (result.statusCode == "PASS") {
-                                    Swal.fire({
-                                        title: "ส่งลิงค์ชำระเงินสำเร็จ!",
-                                        text: "ส่งลิงค์ชำระเงินสำเร็จ",
-                                        icon: "success"
-                                    });
-                                }
-                                else {
-                                    Swal.fire({
-                                        icon: "error",
-                                        title: "Oops...",
-                                        text: result.statusCode.message
-                                    });
-                                }
-                            },
-                            error: function (xhr, status, error) {
-                                console.error(error);
-                            }
-                        });
-                    }
+                // เดิม URL เขียนเป็น "./Home/LinkPayment" ซึ่งพังถ้าเรียกจากหน้าที่ไม่ใช่ root
+                runFixAction({
+                    $icon: $(this),
+                    url: '/Home/LinkPayment',
+                    body: { ApplicationCode: $(this).data('applicationcode') },
+                    confirmTitle: 'ส่งลิงก์ชำระเงินให้ลูกค้า',
+                    confirmDetail: 'ระบบจะส่ง SMS พร้อมลิงก์ชำระเงินไปยังเบอร์ของลูกค้า',
+                    successTitle: 'ส่งลิงก์ชำระเงินแล้ว'
                 });
-
             });
 
     // แบ่งหน้าที่ฝั่ง server — คลิกเลขหน้า/เปลี่ยนจำนวนต่อหน้า จะยิงค้นหาใหม่เฉพาะหน้านั้น
@@ -840,6 +699,17 @@
                (ok ? '' : ' style="color:#000"') + '>' + esc(text) + '</span>';
     }
 
+    // ป้ายสถานะใบคำขอ แยกสีตามความหมาย ไม่ใช่แค่ผ่าน/ไม่ผ่าน
+    // เขียว = ปิดงานแล้ว · เทา = จบแล้วแต่ไม่ได้ขาย · เหลือง = ยังอยู่ระหว่างดำเนินการ
+    function statusBadge(text) {
+        var s = String(text || '').toUpperCase();
+        var cls = s === 'CLOSED' ? 'bg-success'
+                : (s === 'CANCELLED' || s === 'REJECTED') ? 'bg-secondary'
+                : 'bg-warning';
+        var dark = cls === 'bg-warning' ? ' style="color:#000"' : '';
+        return '<span class="badge ' + cls + '"' + dark + '>' + esc(text) + '</span>';
+    }
+
     function fixIcon(cls, code, title) {
         return ' <i class="' + cls + ' fa-solid fa-paper-plane row-fix" data-applicationcode="' +
                esc(code) + '" title="' + esc(title) + '" role="button" tabindex="0"></i>';
@@ -886,7 +756,7 @@
         // สีของป้ายสถานะดูที่ "สถานะ" อย่างเดียว — CLOSED คือปิดงานแล้ว ต้องเป็นเขียว
         // (เดิมผูกสีไว้กับเงื่อนไขของปุ่มส่งสถานะซ้ำ ใบที่ CLOSED แล้วแต่ยังไม่ครบทุกขั้น
         //  เลยขึ้นเป็นเหลือง ทั้งที่สถานะจริงคือปิดงานแล้ว)
-        var statusCell = badge(r.applicationStatusId, r.applicationStatusId === 'CLOSED')
+        var statusCell = statusBadge(r.applicationStatusId)
             + (r.canPushStatusClosed
                 ? fixIcon('C100StatusClosed', r.applicationCode, 'ส่งสถานะ CLOSED ไปปลายทางอีกครั้ง')
                 : '');

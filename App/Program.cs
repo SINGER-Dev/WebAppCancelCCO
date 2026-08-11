@@ -41,6 +41,11 @@ AddDownstream("esig", cs["SGAPIESIG"], c =>
 // URL นี้เดิมฝังอยู่ในโค้ด 4 จุด (SGF_ReCreateESig / ByPassCustomer / ByPassIMEI / Mail)
 AddDownstream("posservice", cs["PosService"] ?? "https://sg-posservice.singerthai.co.th:10082");
 
+// SOAP ส่งลิงก์ชำระเงิน อยู่คนละพอร์ตกับ posservice ตัวอื่น (8344 ไม่ใช่ 10082)
+AddDownstream("poslink", cs["PosLinkService"] ?? "http://sg-posservice.singerthai.co.th:8344");
+
+// TODO: appsettings.Prod.json ชี้ค่านี้ไปที่ api-stg (staging) อยู่ ต้องยืนยัน URL ที่ถูกกับทีม SGB
+// ถ้าเส้นนี้ทำงานบน PROD จะไปยกเลิกกรมธรรม์ที่ staging ไม่ใช่ของจริง
 AddDownstream("sgb", cs["SGBCancelApi"], c =>
 {
     if (!string.IsNullOrWhiteSpace(cs["SGBCancelApikey"])) c.DefaultRequestHeaders.Add("apikey", cs["SGBCancelApikey"]);

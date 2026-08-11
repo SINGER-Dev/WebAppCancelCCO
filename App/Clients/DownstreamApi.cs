@@ -22,6 +22,10 @@ namespace App.Clients
         /// <param name="caller">ชื่อปุ่มที่เรียก ใช้ในการอ่าน log ย้อนหลัง</param>
         Task<DownstreamResponse> PostJsonAsync(string client, string path, object body, string caller,
                                                CancellationToken ct = default);
+
+        /// <summary>ส่งเนื้อความดิบ ใช้กับปลายทางที่ไม่ใช่ JSON เช่น SOAP</summary>
+        Task<DownstreamResponse> PostRawAsync(string client, string path, string body, string contentType, string caller,
+                                              CancellationToken ct = default);
     }
 
     public class DownstreamApi : IDownstreamApi
@@ -34,6 +38,16 @@ namespace App.Clients
                                                            CancellationToken ct = default)
         {
             var json = JsonConvert.SerializeObject(body);
+            return await SendAsync(client, path, json, "application/json", caller, ct);
+        }
+
+        public Task<DownstreamResponse> PostRawAsync(string client, string path, string body, string contentType,
+                                                     string caller, CancellationToken ct = default)
+            => SendAsync(client, path, body, contentType, caller, ct);
+
+        private async Task<DownstreamResponse> SendAsync(string client, string path, string payload, string contentType,
+                                                         string caller, CancellationToken ct)
+        {
             var http = _factory.CreateClient(client);
 
             // BaseAddress ของบางปลายทางมี path นำหน้าอยู่ (เช่น .../c100) ถ้า path ที่ส่งเข้ามา
@@ -44,7 +58,7 @@ namespace App.Clients
 
             try
             {
-                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                using var content = new StringContent(payload, Encoding.UTF8, contentType);
                 using var response = await http.PostAsync(relativePath, content, ct);
 
                 // เดิมเขียน SerializeObject(response.Content.ReadAsStringAsync()) ซึ่ง log ตัว Task
@@ -52,7 +66,7 @@ namespace App.Clients
                 var responseBody = await response.Content.ReadAsStringAsync(ct);
 
                 Log.Information("{Caller} → {Url} : {Status} | request={Request} | response={Response}",
-                    caller, url, (int)response.StatusCode, json, Truncate(responseBody));
+                    caller, url, (int)response.StatusCode, Truncate(payload), Truncate(responseBody));
 
                 return new DownstreamResponse
                 {
@@ -63,7 +77,7 @@ namespace App.Clients
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "{Caller} → {Url} : เรียกไม่ถึงปลายทาง | request={Request}", caller, url, json);
+                Log.Error(ex, "{Caller} → {Url} : เรียกไม่ถึงปลายทาง | request={Request}", caller, url, Truncate(payload));
 
                 return new DownstreamResponse
                 {

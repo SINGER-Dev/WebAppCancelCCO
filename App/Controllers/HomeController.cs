@@ -2397,42 +2397,46 @@ namespace App.Controllers
 
         [InvalidateSearchCache]
         [RequireLogin]
-        public async Task<RegisIMEIRespone> LinkPayment([FromBody] GetApplication _GetApplication)
+        [HttpPost]
+        public async Task<IActionResult> LinkPayment([FromBody] GetApplication _GetApplication)
         {
-            RegisIMEIRespone _RegisIMEIRespone = new RegisIMEIRespone();
-            Log.Debug("SGBCancel By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(_GetApplication));
-            var url = "http://sg-posservice.singerthai.co.th:8344/WebServiceGenLinkWithSms.asmx?op=GenLinkWithSms";
+            var actor = HttpContext.Session.GetString("EMP_CODE");
+            var code = _GetApplication?.ApplicationCode;
+
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return BadRequest(ActionResultDto.Fail("ไม่พบเลขที่ใบคำขอ กรุณาค้นหาใหม่อีกครั้ง"));
+            }
 
             var soapRequest = $@"<?xml version=""1.0"" encoding=""utf-8""?>
         <soap12:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:soap12=""http://www.w3.org/2003/05/soap-envelope"">
           <soap12:Body>
             <GenLinkWithSms xmlns=""http://tempuri.org/"">
-              <AppCode>{_GetApplication.ApplicationCode}</AppCode>
+              <AppCode>{code}</AppCode>
             </GenLinkWithSms>
           </soap12:Body>
         </soap12:Envelope>";
 
-            var content = new StringContent(soapRequest, Encoding.UTF8, "application/soap+xml");
+            // เดิมใช้ HttpClient ตัว static ร่วมกันทั้งคลาส แล้วเพิ่ม Accept header ใหม่ทุกครั้งที่กด
+            // header จึงพอกขึ้นเรื่อย ๆ ตามจำนวนครั้งที่ใช้งาน
+            var response = await _api.PostRawAsync("poslink", "/WebServiceGenLinkWithSms.asmx?op=GenLinkWithSms",
+                                                   soapRequest, "application/soap+xml",
+                                                   $"ส่งลิงก์ชำระเงิน [{code}] โดย {actor}");
 
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/soap+xml"));
-
-            try
+            if (!response.Reached)
             {
-                var response = await client.PostAsync(url, content);
-                response.EnsureSuccessStatusCode();
-
-                var responseBody = await response.Content.ReadAsStringAsync();
-               
-                _RegisIMEIRespone.statusCode = "PASS";
-                Log.Debug(responseBody);
-            }
-            catch (Exception ex)
-            {
-                _RegisIMEIRespone.statusCode = ex.Message;
-                Log.Error($"Error: {ex.Message}");
+                return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
+                    "ตอนนี้ติดต่อระบบส่งลิงก์ชำระเงินไม่ได้ กรุณาลองใหม่อีกครั้งในอีกสักครู่", response.TransportError));
             }
 
-            return _RegisIMEIRespone;
+            if (!response.IsSuccess)
+            {
+                // เดิมกรณีนี้คืน statusCode เป็นข้อความ exception ให้หน้าจอ ซึ่ง FE อ่านไม่ออก
+                return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
+                    "ระบบส่งลิงก์ชำระเงินไม่รับรายการนี้ ลิงก์จึงยังไม่ถูกส่ง", response.Body));
+            }
+
+            return Ok(ActionResultDto.Success($"ส่งลิงก์ชำระเงินของใบคำขอ {code} ให้ลูกค้าทาง SMS แล้ว", response.Body));
         }
 
         [HttpGet("CheckSession")]
@@ -2456,150 +2460,92 @@ namespace App.Controllers
         [InvalidateSearchCache]
         [RequireLogin]
         [HttpPost]
-        public ModelResult PostBypassCustomer(BypassCustomer _bypassCustomer)
+        public async Task<IActionResult> PostBypassCustomer(BypassCustomer _bypassCustomer)
         {
-            var EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            var actor = HttpContext.Session.GetString("EMP_CODE");
+            _bypassCustomer.empCode = actor;
 
-            _bypassCustomer.empCode = EMP_CODE;
-            Log.Information(JsonConvert.SerializeObject(_bypassCustomer));
-            ModelResult modelResult = new ModelResult();
+            var response = await _api.PostJsonAsync("posservice", "/v1/LOS/ByPassCustomer", _bypassCustomer,
+                                                    $"ยกเว้นการตรวจสอบลูกค้า [{_bypassCustomer.IdCard}] โดย {actor}");
 
-            try
+            return BuildDownstreamResult(response,
+                success: $"ยกเว้นการตรวจสอบลูกค้าเลขบัตร {_bypassCustomer.IdCard} เรียบร้อย",
+                rejected: "ระบบปลายทางไม่รับรายการนี้ จึงยังไม่ได้ยกเว้นการตรวจสอบ",
+                unreachable: "ตอนนี้ติดต่อระบบปลายทางไม่ได้ กรุณาลองใหม่อีกครั้งในอีกสักครู่");
+        }
+
+        /// <summary>
+        /// แปลงคำตอบจากระบบปลายทางให้เป็นสัญญาเดียวกับปุ่มอื่น ๆ
+        ///
+        /// ปลายทางกลุ่มนี้ตอบเป็น { status, message } และบางครั้งตอบ HTTP 200 พร้อม status = "BadRequest"
+        /// จึงต้องดูทั้ง HTTP status และ status ในเนื้อคำตอบ ไม่งั้นจะรายงานว่าสำเร็จทั้งที่ปลายทางปฏิเสธ
+        /// </summary>
+        private IActionResult BuildDownstreamResult(Clients.DownstreamResponse response, string success,
+                                                    string rejected, string unreachable)
+        {
+            if (!response.Reached)
             {
-                var jsonstring = JsonConvert.SerializeObject(_bypassCustomer);
-                var client = new HttpClient();
-                string apiUrl = "https://sg-posservice.singerthai.co.th:10082/v1/LOS/ByPassCustomer";
-                var content = new StringContent(jsonstring, null, "application/json");
-                HttpResponseMessage response = client.PostAsync(apiUrl, content).Result;
-                if (response.IsSuccessStatusCode)
-                {
-                    string result = response.Content.ReadAsStringAsync().Result;
-
-                    modelResult =  JsonConvert.DeserializeObject<ModelResult>(result);
-                }
-                else if (response.StatusCode == HttpStatusCode.BadRequest)
-                {
-                    string result = response.Content.ReadAsStringAsync().Result;
-
-                    modelResult = JsonConvert.DeserializeObject<ModelResult>(result);
-                }
-
+                return StatusCode(StatusCodes.Status502BadGateway,
+                    ActionResultDto.Fail(unreachable, response.TransportError));
             }
-            catch (Exception ex)
+
+            ModelResult parsed = null;
+            try { parsed = JsonConvert.DeserializeObject<ModelResult>(response.Body); } catch { }
+
+            bool accepted = response.IsSuccess
+                && (parsed == null || string.IsNullOrWhiteSpace(parsed.status)
+                    || string.Equals(parsed.status, "Success", StringComparison.OrdinalIgnoreCase));
+
+            if (!accepted)
             {
-                Log.Error(ex.Message);
+                var reason = string.IsNullOrWhiteSpace(parsed?.message) ? rejected : parsed.message;
+                return StatusCode(StatusCodes.Status502BadGateway,
+                    ActionResultDto.Fail(reason, response.Body));
             }
-            return modelResult;
 
+            return Ok(ActionResultDto.Success(
+                string.IsNullOrWhiteSpace(parsed?.message) ? success : parsed.message, response.Body));
         }
 
         [InvalidateSearchCache]
         [RequireLogin]
         [HttpPost]
-        public ModelResult PostBypassIMEI(BypassImei _bypassImei)
+        public async Task<IActionResult> PostBypassIMEI(BypassImei _bypassImei)
         {
-            var EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            var actor = HttpContext.Session.GetString("EMP_CODE");
+            _bypassImei.empCode = actor;
 
-            _bypassImei.empCode = EMP_CODE;
-            Log.Information(JsonConvert.SerializeObject(_bypassImei));
-            ModelResult modelResult = new ModelResult();
+            var response = await _api.PostJsonAsync("posservice", "/v1/LOS/ByPassIMEI", _bypassImei,
+                                                    $"ยกเว้นการตรวจสอบเครื่อง [{_bypassImei.Imei}] โดย {actor}");
 
-            try
-            {
-                var jsonstring = JsonConvert.SerializeObject(_bypassImei);
-                var client = new HttpClient();
-                string apiUrl = "https://sg-posservice.singerthai.co.th:10082/v1/LOS/ByPassIMEI";
-                var content = new StringContent(jsonstring, null, "application/json");
-                HttpResponseMessage response = client.PostAsync(apiUrl, content).Result;
-                if (response.IsSuccessStatusCode)
-                {
-                    string result = response.Content.ReadAsStringAsync().Result;
-
-                    modelResult = JsonConvert.DeserializeObject<ModelResult>(result);
-                }
-                else if (response.StatusCode == HttpStatusCode.BadRequest)
-                {
-                    string result = response.Content.ReadAsStringAsync().Result;
-
-                    modelResult = JsonConvert.DeserializeObject<ModelResult>(result);
-                }
-
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex.Message);
-            }
-            return modelResult;
-
+            return BuildDownstreamResult(response,
+                success: $"ยกเว้นการตรวจสอบเครื่องหมายเลข {_bypassImei.Imei} เรียบร้อย",
+                rejected: "ระบบปลายทางไม่รับรายการนี้ จึงยังไม่ได้ยกเว้นการตรวจสอบเครื่อง",
+                unreachable: "ตอนนี้ติดต่อระบบปลายทางไม่ได้ กรุณาลองใหม่อีกครั้งในอีกสักครู่");
         }
 
         [InvalidateSearchCache]
         [RequireLogin]
         [HttpPost]
-        public ModelResult PostChangeIMEI(ChangeImei _changeImei)
+        public async Task<IActionResult> PostChangeIMEI(ChangeImei _changeImei)
         {
-            var EMP_CODE = HttpContext.Session.GetString("EMP_CODE");
+            var actor = HttpContext.Session.GetString("EMP_CODE");
+            _changeImei.empCode = actor;
 
-            _changeImei.empCode = EMP_CODE;
-            Log.Information(JsonConvert.SerializeObject(_changeImei));
-            ModelResult modelResult = new ModelResult();
-
-            try
+            var changeIMEI = new ChangeIMEI
             {
-                ChangeIMEI changeIMEI = new ChangeIMEI();
-                changeIMEI.accountNo = _changeImei.accNo;
-                changeIMEI.originalSerialNo = _changeImei.oldImei;
-                changeIMEI.newSerialNo = _changeImei.newImei;
+                accountNo = _changeImei.accNo,
+                originalSerialNo = _changeImei.oldImei,
+                newSerialNo = _changeImei.newImei
+            };
 
-                //using (HttpClient client = new HttpClient())
-                //{
-                //    string jsonBody = JsonConvert.SerializeObject(changeIMEI);
+            var response = await _api.PostJsonAsync("c100", "/v2/SgFinance/ChangeImei", changeIMEI,
+                                                    $"เปลี่ยนหมายเลขเครื่อง [{_changeImei.accNo}] โดย {actor}");
 
-                //    client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
-
-                //    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                //    HttpResponseMessage responseDevice = client.Send(C100 + "/v2/SgFinance/CancelContractToLMS", content);
-                //    int DeviceStatusCode = (int)responseDevice.StatusCode;
-
-                //    Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
-
-                //    if (!responseDevice.IsSuccessStatusCode)
-                //    {
-                //        var ResponseContent = await responseDevice.Content.ReadAsStringAsync();
-                //        ModelResult modelResult = new ModelResult();
-                //        modelResult = JsonConvert.DeserializeObject<ModelResult>(ResponseContent);
-
-                //        ResultDescription = modelResult.message;
-                //        return ResultDescription;
-                //    }
-                //}
-
-                var jsonstring = JsonConvert.SerializeObject(changeIMEI);
-                var client = new HttpClient();
-                string apiUrl = C100 + "/v2/SgFinance/ChangeImei";
-                var content = new StringContent(jsonstring, null, "application/json");
-                client.DefaultRequestHeaders.Add("apikey", C100Apikey);
-                HttpResponseMessage response = client.PostAsync(apiUrl, content).Result;
-                if (response.IsSuccessStatusCode)
-                {
-                    string result = response.Content.ReadAsStringAsync().Result;
-
-                    modelResult = JsonConvert.DeserializeObject<ModelResult>(result);
-                }
-                else if (response.StatusCode == HttpStatusCode.BadRequest)
-                {
-                    string result = response.Content.ReadAsStringAsync().Result;
-
-                    modelResult = JsonConvert.DeserializeObject<ModelResult>(result);
-                }
-
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex.Message);
-            }
-            return modelResult;
-
+            return BuildDownstreamResult(response,
+                success: $"เปลี่ยนหมายเลขเครื่องของสัญญา {_changeImei.accNo} เป็น {_changeImei.newImei} เรียบร้อย",
+                rejected: "ระบบสินเชื่อไม่รับรายการนี้ หมายเลขเครื่องจึงยังไม่ถูกเปลี่ยน",
+                unreachable: "ตอนนี้ติดต่อระบบสินเชื่อไม่ได้ กรุณาลองใหม่อีกครั้งในอีกสักครู่");
         }
     }
 }

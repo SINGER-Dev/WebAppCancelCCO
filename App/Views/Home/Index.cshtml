@@ -37,11 +37,28 @@
 
             <div>
                 <label class="form-label" for="status">สถานะ</label>
+                @* เดิมมีให้เลือกแค่ 3 สถานะ ใบที่อยู่สถานะอื่นจึงกรองหาไม่ได้เลย
+                   ต้องรู้เลขที่ใบคำขอมาก่อนถึงจะหาเจอ
+
+                   ไม่ใส่ NEW เพราะใบที่สถานะ NEW ยังไม่มีข้อมูลใน ApplicationExtend สักใบ
+                   ผลค้นหาจึงเป็นศูนย์เสมอ ใส่ไว้จะทำให้เข้าใจผิดว่าไม่มีใบคำขอในสถานะนั้น *@
                 <select class="form-select" name="status" id="status">
                     <option value="">ทั้งหมด</option>
-                    <option value="CLOSING">CLOSING</option>
-                    <option value="CLOSED">CLOSED</option>
-                    <option value="CANCELLED">CANCELLED</option>
+                    <optgroup label="ปิดงานแล้ว">
+                        <option value="CLOSED">CLOSED — ปิดงาน</option>
+                        <option value="CANCELLED">CANCELLED — ยกเลิก</option>
+                        <option value="REJECTED">REJECTED — ปฏิเสธ</option>
+                    </optgroup>
+                    <optgroup label="ระหว่างดำเนินการ">
+                        <option value="CLOSING">CLOSING — กำลังปิดงาน</option>
+                        <option value="DRAFT">DRAFT — ร่าง</option>
+                        <option value="SUBMITTED">SUBMITTED — ส่งพิจารณา</option>
+                        <option value="REVIEWING">REVIEWING — กำลังพิจารณา</option>
+                        <option value="NCB">NCB — ตรวจ NCB</option>
+                        <option value="NEEDMOREINFO">NEEDMOREINFO — ขอเอกสารเพิ่ม</option>
+                        <option value="REVISING">REVISING — ส่งกลับให้แก้ไข</option>
+                        <option value="PENDING">PENDING — รอดำเนินการ</option>
+                    </optgroup>
                 </select>
             </div>
             <div>
