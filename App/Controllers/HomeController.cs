@@ -294,10 +294,10 @@ namespace App.Controllers
                 string strSQL = DATABASEK2 + ".[GetApplicationHistory]";
                 sqlCommand = new SqlCommand(strSQL, connection);
                 sqlCommand.CommandType = CommandType.StoredProcedure;
-                sqlCommand.Parameters.AddWithValue("AccountNo", _SearchGetApplicationHistory.AccountNo);
-                sqlCommand.Parameters.AddWithValue("ApplicationCode", _SearchGetApplicationHistory.ApplicationCode);
-                sqlCommand.Parameters.AddWithValue("startdate", _SearchGetApplicationHistory.startdate);
-                sqlCommand.Parameters.AddWithValue("enddate", _SearchGetApplicationHistory.enddate);
+                sqlCommand.Parameters.AddWithValue("AccountNo", (object?)_SearchGetApplicationHistory.AccountNo ?? DBNull.Value);
+                sqlCommand.Parameters.AddWithValue("ApplicationCode", (object?)_SearchGetApplicationHistory.ApplicationCode ?? DBNull.Value);
+                sqlCommand.Parameters.AddWithValue("startdate", (object?)_SearchGetApplicationHistory.startdate ?? DBNull.Value);
+                sqlCommand.Parameters.AddWithValue("enddate", (object?)_SearchGetApplicationHistory.enddate ?? DBNull.Value);
 
                 SqlDataAdapter dtAdapter = new SqlDataAdapter();
                 dtAdapter.SelectCommand = sqlCommand;
@@ -854,9 +854,16 @@ namespace App.Controllers
         [InvalidateSearchCache]
         [RequireLogin]
         [HttpPost]
-        public async Task<string> UpdateDataCancel(FormConfirmModel _FormConfirmModel)
+        public async Task<IActionResult> UpdateDataCancel(FormConfirmModel _FormConfirmModel)
         {
+            // บันทึกผลทีละขั้น เพื่อให้ผู้ใช้เห็นว่าอะไรทำไปแล้วบ้างเมื่อพังกลางทาง
+            var steps = new CancelStepRecorder();
+            var actor = HttpContext.Session.GetString("EMP_CODE");
+            Log.Information("ยกเลิกใบคำขอ (วันเดียว): {Code} โดย {Actor}", _FormConfirmModel?.ApplicationCode, actor);
+
             string ResultDescription = "";
+            var stepLog = steps.Begin("บันทึกคำขอยกเลิก");
+            CancelStepDto stepCancel = null, stepNotify = null;
             try
             {
                 DataTable dt1 = new DataTable();
@@ -869,12 +876,12 @@ namespace App.Controllers
                 sqlCommand1 = new SqlCommand(strSQL, connection1);
                 sqlCommand1.CommandTimeout = 180;
                 sqlCommand1.CommandType = CommandType.StoredProcedure;
-                sqlCommand1.Parameters.AddWithValue("ApplicationCode", _FormConfirmModel.ApplicationCode);
-                sqlCommand1.Parameters.AddWithValue("Remark", _FormConfirmModel.Remark);
-                sqlCommand1.Parameters.AddWithValue("ExceptIMEI", _FormConfirmModel.ExceptIMEI);
-                sqlCommand1.Parameters.AddWithValue("ExceptCus", _FormConfirmModel.ExceptCus);
-                sqlCommand1.Parameters.AddWithValue("Other", _FormConfirmModel.Other);
-                sqlCommand1.Parameters.AddWithValue("CreateBy", HttpContext.Session.GetString("EMP_CODE"));
+                sqlCommand1.Parameters.AddWithValue("ApplicationCode", (object?)_FormConfirmModel.ApplicationCode ?? DBNull.Value);
+                sqlCommand1.Parameters.AddWithValue("Remark", (object?)_FormConfirmModel.Remark ?? DBNull.Value);
+                sqlCommand1.Parameters.AddWithValue("ExceptIMEI", (object?)_FormConfirmModel.ExceptIMEI ?? DBNull.Value);
+                sqlCommand1.Parameters.AddWithValue("ExceptCus", (object?)_FormConfirmModel.ExceptCus ?? DBNull.Value);
+                sqlCommand1.Parameters.AddWithValue("Other", (object?)_FormConfirmModel.Other ?? DBNull.Value);
+                sqlCommand1.Parameters.AddWithValue("CreateBy", (object?)HttpContext.Session.GetString("EMP_CODE") ?? DBNull.Value);
                 sqlCommand1.Parameters.AddWithValue("Source", "Cancel");
 
                 SqlDataAdapter dtAdapter1 = new SqlDataAdapter();
@@ -882,6 +889,8 @@ namespace App.Controllers
                 dt1 = new DataTable();
                 dtAdapter1.Fill(dt1);
                 connection1.Close();
+                steps.Ok(stepLog);
+                stepCancel = steps.Begin("ยกเลิกใบคำขอในระบบ (อัปเดตสถานะเป็น CANCELLED)", irreversible: true);
                 //CancelLOS cancelLOS = new CancelLOS();
                 //cancelLOS.refCode = _FormConfirmModel.ApplicationCode;
                 //cancelLOS.userName = HttpContext.Session.GetString("EMP_CODE");
@@ -951,11 +960,11 @@ namespace App.Controllers
                     {
                         sqlCommand.CommandType = CommandType.StoredProcedure;
                         sqlCommand.CommandTimeout = 120; // Set timeout to 120 seconds
-                        sqlCommand.Parameters.AddWithValue("ApplicationCode", _FormConfirmModel.ApplicationCode);
+                        sqlCommand.Parameters.AddWithValue("ApplicationCode", (object?)_FormConfirmModel.ApplicationCode ?? DBNull.Value);
                         sqlCommand.Parameters.AddWithValue("Remark", _FormConfirmModel.Remark + " " + _FormConfirmModel.Other);
-                        sqlCommand.Parameters.AddWithValue("CANCEL_USER", HttpContext.Session.GetString("EMP_CODE"));
-                        sqlCommand.Parameters.AddWithValue("Except_IMEI", _FormConfirmModel.ExceptIMEI);
-                        sqlCommand.Parameters.AddWithValue("Except_CUST", _FormConfirmModel.ExceptCus);
+                        sqlCommand.Parameters.AddWithValue("CANCEL_USER", (object?)HttpContext.Session.GetString("EMP_CODE") ?? DBNull.Value);
+                        sqlCommand.Parameters.AddWithValue("Except_IMEI", (object?)_FormConfirmModel.ExceptIMEI ?? DBNull.Value);
+                        sqlCommand.Parameters.AddWithValue("Except_CUST", (object?)_FormConfirmModel.ExceptCus ?? DBNull.Value);
 
                         using (SqlDataAdapter dtAdapter = new SqlDataAdapter(sqlCommand))
                         {
@@ -967,6 +976,11 @@ namespace App.Controllers
                                 if ("SUCCESS" != dt.Rows[0]["Result"].ToString().ToUpper())
                                 {
                                     ResultDescription += _GetApplicationRespone.AccountNo + " " + dt.Rows[0]["ResultDescription"].ToString();
+                                    steps.Failed(stepCancel, dt.Rows[0]["ResultDescription"].ToString());
+                                }
+                                else
+                                {
+                                    steps.Ok(stepCancel);
                                 }
                             }
                         }
@@ -975,6 +989,28 @@ namespace App.Controllers
 
                 if (string.IsNullOrEmpty(ResultDescription))
                 {
+                    // อ่านสถานะกลับมายืนยันว่าเปลี่ยนจริง — SP มีเงื่อนไขคัดกรองอยู่ข้างใน
+                    // ถ้าใบคำขอไม่เข้าเงื่อนไข SP จะไม่คืนแถวใด ๆ กลับมาโดยไม่แจ้งอะไร
+                    // เดิมกรณีนี้จะแจ้งว่ายกเลิกสำเร็จทั้งที่สถานะไม่ได้เปลี่ยน หน้าจอจึงไม่ตรงกับความจริง
+                    string statusAfter;
+                    using (var verifyConn = new SqlConnection(strConnString))
+                    {
+                        statusAfter = (await verifyConn.QueryAsync<string>(new CommandDefinition(
+                            $"SELECT ApplicationStatusID FROM {DATABASEK2}.[Application] WITH (NOLOCK) WHERE ApplicationCode = @ApplicationCode",
+                            new { ApplicationCode = _GetApplicationRespone.ApplicationCode },
+                            commandTimeout: 60))).FirstOrDefault() ?? "";
+                    }
+
+                    if (!string.Equals(statusAfter.Trim(), "CANCELLED", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ResultDescription = $"ใบคำขอนี้ไม่เข้าเงื่อนไขการยกเลิก (สถานะยังเป็น {statusAfter.Trim()})";
+                        if (stepCancel != null) steps.Failed(stepCancel, ResultDescription);
+                        return BuildCancelResult(_FormConfirmModel?.ApplicationCode, steps, ResultDescription);
+                    }
+
+                    if (stepCancel != null && stepCancel.Status == "pending") steps.Ok(stepCancel);
+                    stepNotify = steps.Begin("แจ้งสถานะไปยังระบบสัญญาอิเล็กทรอนิกส์");
+
                    
 
 
@@ -999,6 +1035,11 @@ namespace App.Controllers
 
                         var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
                         HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/C100_Status", content);
+                        if (stepNotify != null)
+                        {
+                            if (responseDevice.IsSuccessStatusCode) steps.Ok(stepNotify);
+                            else steps.Failed(stepNotify, $"ระบบปลายทางตอบกลับ HTTP {(int)responseDevice.StatusCode}");
+                        }
                         int DeviceStatusCode = (int)responseDevice.StatusCode;
 
                         Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
@@ -1015,243 +1056,294 @@ namespace App.Controllers
                 //{
                 //    ResultDescription = "ไม่สามารถยกเลิกรายการได้ เนื่องจากเลยกำหนดเวลาการยกเลิกแล้ว";
                 //}
-                return ResultDescription;
+                return BuildCancelResult(_FormConfirmModel?.ApplicationCode, steps, ResultDescription);
             }
             catch (Exception ex)
             {
-                ResultDescription = ex.Message;
-                return ResultDescription;
+                Log.Error(ex, "ยกเลิกใบคำขอไม่สำเร็จ: {Code}", _FormConfirmModel?.ApplicationCode);
+                var current = steps.Steps.LastOrDefault(x => x.Status == "pending");
+                if (current != null) steps.Failed(current, ex.Message);
+                return BuildCancelResult(_FormConfirmModel?.ApplicationCode, steps, ex.Message);
             }
 
 
         }
 
+        /// <summary>ประกอบผลลัพธ์การยกเลิกให้ผู้ใช้เห็นทุกขั้น พร้อมเตือนเมื่อมีขั้นที่ย้อนกลับไม่ได้ทำไปแล้ว</summary>
+        private IActionResult BuildCancelResult(string? code, CancelStepRecorder steps, string error)
+        {
+            bool ok = string.IsNullOrWhiteSpace(error) && !steps.AnyFailed;
+
+            string message;
+            if (ok)
+            {
+                message = $"ยกเลิกใบคำขอ {code} เรียบร้อย";
+            }
+            else if (steps.HasIrreversibleDone)
+            {
+                // กรณีอันตรายที่สุด: ระบบอื่นถูกแก้ไปแล้วแต่ขั้นตอนไม่จบ ต้องบอกให้ชัดว่าอย่าเพิ่งกดซ้ำ
+                message = "ยกเลิกไม่สมบูรณ์ — บางขั้นตอนทำไปแล้วและย้อนกลับเองไม่ได้ " +
+                          "กรุณาแจ้งทีมผู้ดูแลพร้อมข้อมูลด้านล่าง อย่าเพิ่งกดยกเลิกซ้ำ";
+            }
+            else
+            {
+                message = $"ยกเลิกใบคำขอ {code} ไม่สำเร็จ ยังไม่มีการเปลี่ยนแปลงข้อมูล";
+            }
+
+            Log.Information("ผลการยกเลิก {Code}: {Result} | {Steps}", code, ok ? "สำเร็จ" : "ไม่สำเร็จ",
+                string.Join(" -> ", steps.Steps.Select(x => x.Name + "=" + x.Status)));
+
+            return Ok(new CancelResultDto
+            {
+                Ok = ok,
+                Message = message,
+                Detail = string.IsNullOrWhiteSpace(error) ? null : error,
+                Steps = steps.Steps
+            });
+        }
+
+
         [InvalidateSearchCache]
         [RequireLogin]
         [HttpPost]
-        public async Task<string> UpdateDataCancelCLOSED(FormConfirmModel _FormConfirmModel)
+        public async Task<IActionResult> UpdateDataCancelCLOSED(FormConfirmModel _FormConfirmModel)
         {
+            // ยกเลิกแบบข้ามวันไล่ทำหลายระบบต่อกัน จึงบันทึกผลทีละขั้น
+            // เพื่อให้ผู้ใช้เห็นว่าอะไรทำไปแล้วบ้างเมื่อพังกลางทาง แทนที่จะได้แค่ข้อความ error ก้อนเดียว
+            var steps = new CancelStepRecorder();
+            var actor = HttpContext.Session.GetString("EMP_CODE");
+            var code = _FormConfirmModel?.ApplicationCode;
+            var remark = (_FormConfirmModel?.Remark ?? "") + (_FormConfirmModel?.Other ?? "");
+            Log.Information("ยกเลิกใบคำขอ (ข้ามวัน): {Code} โดย {Actor}", code, actor);
+
             string ResultDescription = "";
+            var stepLog = steps.Begin("บันทึกคำขอยกเลิก");
             try
             {
-                DataTable dt = new DataTable();
-                SqlConnection connection = new SqlConnection();
-                connection.ConnectionString = strConnString;
-                connection.Open();
-                //Write Log
-                SqlCommand sqlCommand;
-                string strSQL = DATABASEK2 + ".[CCO_CANCEL]";
-                sqlCommand = new SqlCommand(strSQL, connection);
-                sqlCommand.CommandTimeout = 180;
-                sqlCommand.CommandType = CommandType.StoredProcedure;
-                sqlCommand.Parameters.AddWithValue("ApplicationCode", _FormConfirmModel.ApplicationCode);
-                sqlCommand.Parameters.AddWithValue("Remark", _FormConfirmModel.Remark);
-                sqlCommand.Parameters.AddWithValue("ExceptIMEI", _FormConfirmModel.ExceptIMEI);
-                sqlCommand.Parameters.AddWithValue("ExceptCus", _FormConfirmModel.ExceptCus);
-                sqlCommand.Parameters.AddWithValue("Other", _FormConfirmModel.Other);
-                sqlCommand.Parameters.AddWithValue("CreateBy", HttpContext.Session.GetString("EMP_CODE"));
-                sqlCommand.Parameters.AddWithValue("Source", "CancelCLOSED");
-
-                SqlDataAdapter dtAdapter = new SqlDataAdapter();
-                dtAdapter.SelectCommand = sqlCommand;
-                dt = new DataTable();
-                dtAdapter.Fill(dt);
-                connection.Close();
-
-                CancelLOS cancelLOS = new CancelLOS();
-                cancelLOS.refCode = _FormConfirmModel.ApplicationCode;
-                cancelLOS.userName = HttpContext.Session.GetString("EMP_CODE");
-
-
-
-                //API Calcel
-                //Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody));
-
-                //using (HttpClient client = new HttpClient())
-                //{
-                //    string jsonBody = JsonConvert.SerializeObject(cancelLOS);
-
-                //    client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
-
-                //    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                //    HttpResponseMessage responseDevice = await client.PostAsync(C100 + "/v2/SgFinance/CancelContractToLMS", content);
-                //    int DeviceStatusCode = (int)responseDevice.StatusCode;
-
-                //    Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
-
-
-
-                //    if (!responseDevice.IsSuccessStatusCode)
-                //    {
-                //        var ResponseContent = await responseDevice.Content.ReadAsStringAsync();
-                //        ModelResult modelResult = new ModelResult();
-                //        modelResult = JsonConvert.DeserializeObject<ModelResult>(ResponseContent);
-
-                //        ResultDescription = modelResult.message;
-                //        return ResultDescription;
-                //    }
-                //}
-
-
-                // Define the start and end times for the period (8:00 AM - 10:00 PM)
-                TimeSpan periodStart = new TimeSpan(8, 0, 0); // 8:00 AM
-                TimeSpan periodEnd = new TimeSpan(22, 0, 0); // 10:00 PM
-
-                // Example time to check
-                DateTime now = DateTime.Now;
-                TimeSpan currentTime = now.TimeOfDay;
-
-                // Check if the current time is within the period
-                bool isWithinPeriod = currentTime >= periodStart && currentTime <= periodEnd;
-
-                //if (isWithinPeriod)
-                //{
-
-
-                GetApplication _GetApplication = new GetApplication();
-                _GetApplication.ApplicationCode = _FormConfirmModel.ApplicationCode;
-                GetApplicationRespone _GetApplicationRespone = await GetApplication(_GetApplication);
-
-                //Cancel Application
-                CCOWebServiceModel _CCOWebService = new CCOWebServiceModel();
-                _CCOWebService.id = _GetApplicationRespone.ApplicationID;
-                MessageModel _MessageModel = await CCOWebService(_CCOWebService);
-
-                //Cancel EZ Tax
-                //GetTokenEZTaxRp _GetTokenEZTaxRp = await GetTokenEZTax();
-
-                //Cancel econtract
-                //SqlDataAdapter dtAdapter = new SqlDataAdapter();
-
-                //SqlCommand sqlCommand;
-                strSQL = DATABASEK2 + ".[LoanTypeCate]";
-                sqlCommand = new SqlCommand(strSQL, connection);
-                sqlCommand.CommandTimeout = 180;
-                sqlCommand.CommandType = CommandType.StoredProcedure;
-                sqlCommand.Parameters.AddWithValue("ApplicationCode", _GetApplicationRespone.ApplicationCode);
-                dtAdapter.SelectCommand = sqlCommand;
-                //DataTable dt = new DataTable();
-                dtAdapter.Fill(dt);
-                connection.Close();
-                sqlCommand.Parameters.Clear();
-                if(dt.Rows.Count > 0)
+                // ---- 1. บันทึกคำขอยกเลิกลง log ----
+                using (var connection = new SqlConnection(strConnString))
                 {
-                    if (dt.Rows[0]["loanTypeCate"].ToString().ToUpper() == "LOCKPHONE" && dt.Rows[0]["AccountNo"].ToString() != "")
-                    {
-                        //API Calcel
-                        //Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody));
-
-                        using (HttpClient client = new HttpClient())
+                    await connection.ExecuteAsync(new CommandDefinition(
+                        $"{DATABASEK2}.[CCO_CANCEL]",
+                        new
                         {
-                            string jsonBody = JsonConvert.SerializeObject(cancelLOS);
+                            ApplicationCode = code,
+                            Remark = _FormConfirmModel?.Remark,
+                            ExceptIMEI = _FormConfirmModel?.ExceptIMEI,
+                            ExceptCus = _FormConfirmModel?.ExceptCus,
+                            Other = _FormConfirmModel?.Other,
+                            CreateBy = actor,
+                            Source = "CancelCLOSED"
+                        },
+                        commandType: CommandType.StoredProcedure, commandTimeout: 180));
+                }
+                steps.Ok(stepLog);
 
-                            client.DefaultRequestHeaders.Add("Apikey", C100Apikey);
+                // ---- 2. อ่านข้อมูลใบคำขอ ----
+                var stepRead = steps.Begin("ตรวจสอบข้อมูลใบคำขอ");
+                var _GetApplication = new GetApplication { ApplicationCode = code };
+                var _GetApplicationRespone = await GetApplication(_GetApplication);
 
-                            var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                            HttpResponseMessage responseDevice = await client.PostAsync(C100 + "/v2/SgFinance/CancelContractToLMS", content);
-                            int DeviceStatusCode = (int)responseDevice.StatusCode;
+                if (string.IsNullOrWhiteSpace(_GetApplicationRespone?.ApplicationID))
+                {
+                    // เดิมกรณีนี้จะวิ่งต่อไปยิง SOAP ด้วย id ว่าง แล้วค่อยพังปลายทางแบบไม่รู้สาเหตุ
+                    steps.Failed(stepRead, "ไม่พบใบคำขอนี้ในระบบ");
+                    return BuildCancelResult(code, steps, $"ไม่พบใบคำขอ {code} ในระบบ");
+                }
+                steps.Ok(stepRead, $"เลขที่สัญญา {(string.IsNullOrWhiteSpace(_GetApplicationRespone.AccountNo) ? "-" : _GetApplicationRespone.AccountNo.Trim())}");
 
-                            Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
-
-
-
-                            if (!responseDevice.IsSuccessStatusCode)
-                            {
-                                var ResponseContent = await responseDevice.Content.ReadAsStringAsync();
-                                ModelResult modelResult = new ModelResult();
-                                modelResult = JsonConvert.DeserializeObject<ModelResult>(ResponseContent);
-
-                                ResultDescription = modelResult.message;
-                                return ResultDescription;
-                            }
-                        }
-                    }
+                // ---- 3. ยกเลิกงานที่ค้างอยู่ในระบบพิจารณาสินเชื่อ (K2) ----
+                var stepK2 = steps.Begin("ยกเลิกงานในระบบพิจารณาสินเชื่อ", irreversible: true);
+                var _MessageModel = await CCOWebService(new CCOWebServiceModel { id = _GetApplicationRespone.ApplicationID });
+                if (_MessageModel?.StatusCode == "200")
+                {
+                    steps.Ok(stepK2);
+                }
+                else
+                {
+                    // เดิมผลลัพธ์ตรงนี้ถูกทิ้งไปทั้งหมด ต่อให้ยกเลิกงานใน K2 ไม่สำเร็จก็วิ่งต่อเงียบ ๆ
+                    // ใบคำขอที่ยกเลิกแบบข้ามวันคือใบที่ปิดงานไปแล้ว งานใน K2 จึงมักไม่มีให้ยกเลิก
+                    // กรณีนี้ไม่ถือว่าล้มเหลว แต่ต้องบอกให้เห็น ไม่ใช่รายงานว่าสำเร็จทั้งที่ไม่ได้ทำ
+                    steps.Skipped(stepK2, "ไม่มีงานค้างให้ยกเลิกในระบบพิจารณาสินเชื่อ (" + _MessageModel?.Message + ")");
                 }
 
-
-                strSQL = DATABASEK2 + ".[CancelApplication_CLOSED]";
-                sqlCommand = new SqlCommand(strSQL, connection);
-                sqlCommand.CommandTimeout = 180;
-                sqlCommand.CommandType = CommandType.StoredProcedure;
-                sqlCommand.Parameters.AddWithValue("ApplicationCode", _GetApplicationRespone.ApplicationCode);
-                sqlCommand.Parameters.AddWithValue("Remark", _FormConfirmModel.Remark + "" + _FormConfirmModel.Other);
-                sqlCommand.Parameters.AddWithValue("CANCEL_USER", HttpContext.Session.GetString("EMP_CODE"));
-
-
-                dtAdapter.SelectCommand = sqlCommand;
-                dt = new DataTable();
-                dtAdapter.Fill(dt);
-                connection.Close();
-                if (dt.Rows.Count > 0)
+                // ---- 4. ดูประเภทสินเชื่อ เพื่อตัดสินใจว่าต้องยกเลิกสัญญาที่ระบบสินเชื่อด้วยหรือไม่ ----
+                // เดิมเรียก SP [LoanTypeCate] ซึ่งมีเฉพาะบน PROD ไม่มีบน DEV ทำให้ทดสอบบน DEV แล้วพังทุกครั้ง
+                // ตรงนี้จึงย้ายมาเป็น query ตรงด้วยเงื่อนไขเดียวกับ SP เป๊ะ ๆ (loanTypeCate + AccountNo)
+                var stepType = steps.Begin("ตรวจสอบประเภทสินเชื่อ");
+                LoanTypeCateRow typeRow;
+                using (var connection = new SqlConnection(strConnString))
                 {
-                    if ("SUCCESS" != dt.Rows[0]["Result"].ToString().ToUpper())
-                    {
-                        ResultDescription += _GetApplicationRespone.AccountNo + " " + dt.Rows[0]["ResultDescription"].ToString();
-                    }
-                    else
-                    {
-                        //ยกเลิก LMS Call API
-                        
-                    }
+                    typeRow = (await connection.QueryAsync<LoanTypeCateRow>(new CommandDefinition(
+                        $@"SELECT e.loanTypeCate, a.AccountNo
+                             FROM {DATABASEK2}.[Application] a WITH (NOLOCK)
+                       INNER JOIN {DATABASEK2}.[ApplicationExtend] e WITH (NOLOCK)
+                               ON a.ApplicationID = e.ApplicationID
+                            WHERE a.ApplicationCode = @ApplicationCode",
+                        new { ApplicationCode = _GetApplicationRespone.ApplicationCode },
+                        commandTimeout: 180))).FirstOrDefault();
                 }
 
-                sqlCommand.Parameters.Clear();
+                var loanTypeCate = (typeRow?.loanTypeCate ?? "").Trim();
+                var accountNo = (typeRow?.AccountNo ?? "").Trim();
+                bool needLmsCancel = loanTypeCate.ToUpper() == "LOCKPHONE" && accountNo != "";
+                steps.Ok(stepType, string.IsNullOrEmpty(loanTypeCate) ? "ไม่ระบุประเภท" : loanTypeCate);
 
-                if (ResultDescription == "")
+                // ---- 5. ยกเลิกสัญญาที่ระบบสินเชื่อ (LMS) ----
+                var stepLms = steps.Begin("ยกเลิกสัญญาในระบบสินเชื่อ", irreversible: true);
+                if (!needLmsCancel)
                 {
-                    //ถ้าเป็น SGB
-                    if (!string.IsNullOrEmpty(_GetApplicationRespone.appIns))
+                    steps.Skipped(stepLms, loanTypeCate.ToUpper() != "LOCKPHONE"
+                        ? "ใบคำขอนี้ไม่ใช่ประเภท LOCKPHONE จึงไม่มีสัญญาที่ต้องยกเลิก"
+                        : "ใบคำขอนี้ยังไม่มีเลขที่สัญญา จึงไม่มีสัญญาที่ต้องยกเลิก");
+                }
+                else
+                {
+                    // เดิมส่ง ApplicationCode (เช่น 060-2608-00010) ไปในช่อง refCode
+                    // แต่ระบบสินเชื่อรู้จักใบคำขอด้วยเลขอ้างอิงของ LOS (เช่น REQ-2026-08-000164) จึงตอบกลับว่าไม่พบรายการ
+                    // จะยกเลิกผ่านหรือไม่จึงขึ้นกับว่า CCO ค้นด้วยเลขไหน ซึ่งเป็นที่มาของอาการ "ยกเลิกแล้วหน้าจอไม่อัปเดต"
+                    var refCode = (_GetApplicationRespone.RefCode ?? "").Trim();
+                    if (string.IsNullOrEmpty(refCode)) refCode = code;
+                    var cancelLOS = new CancelLOS { refCode = refCode, userName = actor };
+                    var lms = await _api.PostJsonAsync("c100", "/v2/SgFinance/CancelContractToLMS", cancelLOS,
+                                                       $"ยกเลิกสัญญาข้ามวัน [{code}] โดย {actor}");
+
+                    if (!lms.Reached)
                     {
-                        SGBCancelRespone sGBCancelRespone = new SGBCancelRespone();
-                        sGBCancelRespone = await SGBCancel(_GetApplication);
+                        steps.Failed(stepLms, "ติดต่อระบบสินเชื่อไม่ได้ — " + lms.TransportError);
+                        return BuildCancelResult(code, steps, lms.TransportError);
                     }
-
-                    string currentDateTime = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
-                    var requestBody = new
+                    if (!lms.IsSuccess)
                     {
-                        applicationCode = _GetApplicationRespone.ApplicationCode,
-                        applicationStatus = "CANCELLED",
-                        approvalStatus = "CANCELLED",
-                        approvalDatetime = currentDateTime,
-                        remark = _FormConfirmModel.Remark + "" + _FormConfirmModel.Other
-                    };
+                        // เดิมจุดนี้ return ข้อความดิบออกไปเฉย ๆ สถานะจึงไม่เคยถูกอัปเดต
+                        // และหน้าจอ CCO ยังแสดงสถานะเดิมทั้งที่งานใน K2 ถูกยกเลิกไปแล้ว
+                        steps.Failed(stepLms, DescribeError(lms.Body));
+                        return BuildCancelResult(code, steps, lms.Body);
+                    }
+                    steps.Ok(stepLms, "เลขที่สัญญา " + accountNo);
+                }
 
-                    Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody));
-
-                    using (HttpClient client = new HttpClient())
-                    {
-                        string jsonBody = JsonConvert.SerializeObject(requestBody);
-
-                        client.DefaultRequestHeaders.Add("apikey", ApiKey);
-                        client.DefaultRequestHeaders.Add("user", "DEV");
-
-                        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                        HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/C100_Status", content);
-                        int DeviceStatusCode = (int)responseDevice.StatusCode;
-
-                        Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
-
-                        if (responseDevice.IsSuccessStatusCode)
+                // ---- 6. อัปเดตสถานะใบคำขอเป็น CANCELLED ----
+                var stepCancel = steps.Begin("ยกเลิกใบคำขอในระบบ (อัปเดตสถานะเป็น CANCELLED)", irreversible: true);
+                CancelSpRow cancelRow;
+                using (var connection = new SqlConnection(strConnString))
+                {
+                    cancelRow = (await connection.QueryAsync<CancelSpRow>(new CommandDefinition(
+                        $"{DATABASEK2}.[CancelApplication_CLOSED]",
+                        new
                         {
-                            var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
-
-                        }
-                    }
+                            ApplicationCode = _GetApplicationRespone.ApplicationCode,
+                            Remark = remark,
+                            CANCEL_USER = actor
+                        },
+                        commandType: CommandType.StoredProcedure, commandTimeout: 180))).FirstOrDefault();
                 }
-                //}
-                //else
-                //{
-                //    ResultDescription = "ไม่สามารถยกเลิกรายการได้ เนื่องจากเลยกำหนดเวลาการยกเลิกแล้ว";
-                //}
-                return ResultDescription;
+
+                if (cancelRow != null && !string.Equals(cancelRow.Result, "SUCCESS", StringComparison.OrdinalIgnoreCase))
+                {
+                    ResultDescription = (_GetApplicationRespone.AccountNo ?? "").Trim() + " " + cancelRow.ResultDescription;
+                    steps.Failed(stepCancel, cancelRow.ResultDescription);
+                    return BuildCancelResult(code, steps, ResultDescription);
+                }
+
+                // อ่านสถานะกลับมายืนยันว่าเปลี่ยนจริง ไม่เชื่อผลจาก SP อย่างเดียว
+                // เพราะ SP มีเงื่อนไขคัดกรองอยู่ข้างใน (ต้องมีเลขที่สัญญา สัญญาต้อง ACTIVE ฯลฯ)
+                // ถ้าใบคำขอไม่เข้าเงื่อนไข SP จะไม่คืนแถวใด ๆ กลับมาโดยไม่แจ้งอะไรเลย
+                // เดิมกรณีนี้จะถือว่าผ่านทั้งที่สถานะไม่ได้เปลี่ยน — เป็นที่มาของอาการ "ยกเลิกแล้วหน้าจอไม่อัปเดต"
+                string statusAfter;
+                using (var connection = new SqlConnection(strConnString))
+                {
+                    statusAfter = (await connection.QueryAsync<string>(new CommandDefinition(
+                        $"SELECT ApplicationStatusID FROM {DATABASEK2}.[Application] WITH (NOLOCK) WHERE ApplicationCode = @ApplicationCode",
+                        new { ApplicationCode = _GetApplicationRespone.ApplicationCode },
+                        commandTimeout: 60))).FirstOrDefault() ?? "";
+                }
+
+                if (!string.Equals(statusAfter.Trim(), "CANCELLED", StringComparison.OrdinalIgnoreCase))
+                {
+                    ResultDescription = cancelRow?.ResultDescription
+                        ?? $"ใบคำขอนี้ไม่เข้าเงื่อนไขการยกเลิกแบบข้ามวัน (สถานะยังเป็น {statusAfter.Trim()})";
+                    steps.Failed(stepCancel, ResultDescription);
+                    return BuildCancelResult(code, steps, ResultDescription);
+                }
+                steps.Ok(stepCancel);
+
+                // ---- 7. ยกเลิกกรมธรรม์ประกันภัย (SGB) ----
+                var stepSgb = steps.Begin("ยกเลิกกรมธรรม์ประกันภัย");
+                if (string.IsNullOrEmpty(_GetApplicationRespone.appIns))
+                {
+                    steps.Skipped(stepSgb, "ใบคำขอนี้ไม่มีกรมธรรม์ประกันภัยผูกอยู่");
+                }
+                else
+                {
+                    await SGBCancel(_GetApplication);
+                    steps.Ok(stepSgb);
+                }
+
+                // ---- 8. แจ้งสถานะกลับไปยังระบบสัญญาอิเล็กทรอนิกส์ ----
+                var stepNotify = steps.Begin("แจ้งสถานะไปยังระบบสัญญาอิเล็กทรอนิกส์");
+                var requestBody = new
+                {
+                    applicationCode = _GetApplicationRespone.ApplicationCode,
+                    applicationStatus = "CANCELLED",
+                    approvalStatus = "CANCELLED",
+                    approvalDatetime = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                    remark = remark
+                };
+
+                var notify = await _api.PostJsonAsync("esig", "/sgesig/Service/C100_Status", requestBody,
+                                                      $"แจ้งยกเลิกข้ามวัน [{code}] โดย {actor}");
+
+                if (!notify.Reached)
+                {
+                    steps.Failed(stepNotify, "ติดต่อระบบสัญญาอิเล็กทรอนิกส์ไม่ได้ — " + notify.TransportError);
+                }
+                else if (!notify.IsSuccess)
+                {
+                    steps.Failed(stepNotify, DescribeError(notify.Body));
+                }
+                else
+                {
+                    steps.Ok(stepNotify);
+                }
+
+                return BuildCancelResult(code, steps, ResultDescription);
             }
             catch (Exception ex)
             {
-                ResultDescription = ex.Message;
-                return ResultDescription;
+                Log.Error(ex, "ยกเลิกใบคำขอ (ข้ามวัน) ไม่สำเร็จ: {Code}", code);
+                var current = steps.Steps.LastOrDefault();
+                if (current != null && current.Status == "pending")
+                {
+                    steps.Failed(current, ex.Message);
+                }
+                return BuildCancelResult(code, steps, ex.Message);
             }
+        }
 
+        private sealed class LoanTypeCateRow
+        {
+            public string? loanTypeCate { get; set; }
+            public string? AccountNo { get; set; }
+        }
 
+        private sealed class CancelSpRow
+        {
+            public string? Result { get; set; }
+            public string? ResultDescription { get; set; }
+        }
+
+        /// <summary>ดึงข้อความที่ปลายทางตอบกลับมาให้อ่านรู้เรื่อง ถ้าแกะไม่ได้ก็คืนตัวดิบไป</summary>
+        private static string DescribeError(string body)
+        {
+            if (string.IsNullOrWhiteSpace(body)) return "ระบบปลายทางไม่รับรายการนี้";
+            try
+            {
+                var parsed = JsonConvert.DeserializeObject<ModelResult>(body);
+                if (!string.IsNullOrWhiteSpace(parsed?.message)) return parsed.message;
+            }
+            catch { /* ปลายทางไม่ได้ตอบเป็น JSON — ใช้ตัวดิบ */ }
+            return body;
         }
 
         protected HttpWebRequest CreateWebRequest(string url)
@@ -1319,6 +1411,27 @@ namespace App.Controllers
                         }
                     }
                 }
+                return _MessageModel;
+            }
+            catch (WebException wex)
+            {
+                // ปลายทางตอบ 500 มาพร้อมรายละเอียดใน body แต่ GetResponse() โยน exception ทิ้งไป
+                // ทำให้เดิมเห็นแค่ "(500) Internal Server Error" ไล่ต่อไม่ได้ว่าเพราะอะไร
+                string detail = "";
+                try
+                {
+                    using var errStream = wex.Response?.GetResponseStream();
+                    if (errStream != null)
+                    {
+                        using var rd = new StreamReader(errStream);
+                        detail = rd.ReadToEnd();
+                    }
+                }
+                catch { /* อ่าน body ไม่ได้ก็ใช้ข้อความ exception ตามเดิม */ }
+
+                _MessageModel.StatusCode = "500";
+                _MessageModel.Message = string.IsNullOrWhiteSpace(detail) ? wex.Message : wex.Message + " | " + detail;
+                Log.Error("WorkflowGoToCancelRequest Fail : {Message} | {Detail}", wex.Message, detail);
                 return _MessageModel;
             }
             catch (Exception ex)
@@ -1642,14 +1755,16 @@ namespace App.Controllers
             try
             {
                 // SP ดึง "คำขอเดิมที่เคยส่งไปปลายทาง" ออกมาจาก log เพื่อส่งซ้ำ
+                // ต้องระบุชนิดที่มีชื่อคอลัมน์ — SP คืนหลายคอลัมน์ (OrderID, StatusCode, StatusDesc)
+                // ถ้าใช้ Query<string> Dapper จะหยิบคอลัมน์แรกคือ OrderID ไม่ใช่ payload ที่ต้องการ
                 string statusDesc;
                 using (var connection = new SqlConnection(strConnString))
                 {
-                    statusDesc = (await connection.QueryAsync<string>(new CommandDefinition(
+                    statusDesc = (await connection.QueryAsync<StatusReplayRow>(new CommandDefinition(
                         $"{DATABASEK2}.[GetSendEsignatureStatusSGFinance]",
                         new { ApplicationCode = code },
                         commandType: CommandType.StoredProcedure,
-                        commandTimeout: 60))).FirstOrDefault();
+                        commandTimeout: 60))).FirstOrDefault()?.StatusDesc;
                 }
 
                 if (string.IsNullOrWhiteSpace(statusDesc))

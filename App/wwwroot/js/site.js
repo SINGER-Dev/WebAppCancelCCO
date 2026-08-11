@@ -69,136 +69,69 @@
             }); 
         });
 
-        $("#btnFetch2").click(function (e) {
+        $("#btnFetch2").click(function (e) { runCancel(e, '/Home/UpdateDataCancelCLOSED', 'ยกเลิกใบคำขอแบบข้ามวัน'); });
 
-            checkSession();
+        $("#btnFetch").click(function (e) { runCancel(e, '/Home/UpdateDataCancel', 'ยกเลิกใบคำขอ'); });
 
+        // ยกเลิกใบคำขอ — ทำหลายระบบต่อกัน จึงต้องแสดงผลทีละขั้นให้เห็นว่าไปถึงไหนแล้ว
+        function runCancel(e, url, opName) {
             e.preventDefault();
 
-
-
-
-            if ($.trim($('#Remark').val()) == "" || ($.trim($('#Remark').val()) == "อื่นๆ" && $.trim($('#Other').val()) == "")) {
-                Swal.fire({
-                    icon: "error",
-                    title: "Oops...",
-                    text: "กรุณากรอกข้อมูลให้ครบถ้วน"
-                })
+            if ($.trim($('#Remark').val()) === '' ||
+                ($.trim($('#Remark').val()) === 'อื่นๆ' && $.trim($('#Other').val()) === '')) {
+                Swal.fire({ icon: 'error', title: 'กรอกข้อมูลไม่ครบ', text: 'กรุณาเลือกเหตุผลการยกเลิก' });
+                return;
             }
-            else {
 
-                Swal.fire({
-                    title: "ยืนยันการยกเลิกใบคำขอ " + $('#ApplicationCode').val(),
-                    showCancelButton: true,
-                    confirmButtonText: "ยืนยัน",
-                    cancelButtonText: "ออก",
-                }).then((result) => {
-                    /* Read more about isConfirmed, isDenied below */
-                    if (result.isConfirmed) {
-                        $('#btnFetch2').prop("disabled", true);
-                        // add spinner to button
-                        $('#btnFetch2').html(
-                            ' <span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span> Loading...'
-                        );
+            var code = $('#ApplicationCode').val();
+            var opts = { confirmTitle: opName, successTitle: opName + 'เรียบร้อย' };
 
-                        var formData = $("#FormCancel").serialize(); // Serialize form data
-                        $.ajax({
-                            url: "/Home/UpdateDataCancelCLOSED", // Action URL
-                            type: "POST", // Method (POST in this case)
-                            data: formData,
-                            success: function (result) {
-                                if (result == "") {
-                                    Swal.fire({
-                                        title: "ยกเลิกรายการ!",
-                                        text: "ยกเลิกรายการสำเร็จ",
-                                        icon: "success"
-                                    }).then(function () {
-                                        // Redirect the user
-                                        window.location.href = "/";
-                                    });
-                                }
-                                else {
-                                    Swal.fire({
-                                        icon: "error",
-                                        title: "Oops...",
-                                        text: result
-                                    }).then(function () {
-                                        location.reload();
-                                    });
-                                }
-                            },
-                            error: function (xhr, status, error) {
-                                console.error(error);
-                            }
-                        });
+            slipModal({
+                kind: 'ask', code: code, operation: opName, badge: 'รอยืนยัน',
+                message: 'ระบบจะยกเลิกใบคำขอนี้ทั้งในระบบสินเชื่อและระบบสัญญา บางขั้นตอนย้อนกลับไม่ได้'
+            }, {
+                showCancelButton: true, confirmButtonText: 'ยืนยันยกเลิกใบคำขอ',
+                cancelButtonText: 'ไม่ยกเลิก', reverseButtons: true, focusCancel: true
+            }).then(function (choice) {
+                if (!choice.isConfirmed) { return; }
+
+                slipWaiting(opts, code);
+
+                $.ajax({
+                    url: url, type: 'POST', data: $('#FormCancel').serialize(),
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                }).done(function (res) {
+                    if (res && typeof res === 'object' && 'ok' in res) {
+                        slipModal({
+                            kind: res.ok ? 'ok' : 'warn', code: code, operation: opName,
+                            badge: res.ok ? 'สำเร็จ' : 'ไม่สมบูรณ์',
+                            message: res.message,
+                            hint: res.ok ? 'ระบบอัปเดตสถานะใบคำขอแล้ว'
+                                         : 'ดูรายการด้านล่างว่าขั้นไหนผ่านและขั้นไหนไม่ผ่าน',
+                            steps: res.steps, detail: res.detail
+                        }, { confirmButtonText: res.ok ? 'เรียบร้อย' : 'ปิด' })
+                        .then(function () { if (res.ok) { window.location.href = '/'; } });
+                    } else {
+                        // เผื่อ endpoint เดิมที่ยังคืนข้อความดิบ
+                        slipModal({
+                            kind: String(res || '') === '' ? 'ok' : 'warn', code: code, operation: opName,
+                            badge: String(res || '') === '' ? 'สำเร็จ' : 'ไม่สำเร็จ',
+                            message: String(res || '') === '' ? 'ยกเลิกใบคำขอเรียบร้อย' : String(res)
+                        }, { confirmButtonText: 'ปิด' })
+                        .then(function () { if (String(res || '') === '') { window.location.href = '/'; } });
                     }
+                }).fail(function (xhr) {
+                    if (xhr.status === 401) { window.location.href = '/Login'; return; }
+                    var r = xhr.responseJSON;
+                    slipModal({
+                        kind: xhr.status === 403 ? 'lock' : 'err', code: code, operation: opName,
+                        badge: xhr.status === 403 ? 'ทำไม่ได้' : 'ขัดข้อง',
+                        message: (r && r.message) || 'ยกเลิกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+                        steps: r && r.steps, detail: r && r.detail
+                    }, { confirmButtonText: 'ปิด' });
                 });
-            }
-        });
-
-        $("#btnFetch").click(function (e) {
-
-            checkSession();
-
-            e.preventDefault();
-
-            if ($.trim($('#Remark').val()) == "" || ($.trim($('#Remark').val()) == "อื่นๆ" && $.trim($('#Other').val()) == "")) {
-                Swal.fire({
-                    icon: "error",
-                    title: "Oops...",
-                    text: "กรุณากรอกข้อมูลให้ครบถ้วน"
-                })
-            }
-            else {
-
-                Swal.fire({
-                    title: "ยืนยันการยกเลิกใบคำขอ " + $('#ApplicationCode').val(),
-                    showCancelButton: true,
-                    confirmButtonText: "ยืนยัน",
-                    cancelButtonText: "ออก",
-                }).then((result) => {
-                    /* Read more about isConfirmed, isDenied below */
-                    if (result.isConfirmed) {
-                        $('#btnFetch').prop("disabled", true);
-                        // add spinner to button
-                        $('#btnFetch').html(
-                            ' <span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span> Loading...'
-                        );
-
-                        var formData = $("#FormCancel").serialize(); // Serialize form data
-                        $.ajax({
-                            url: "/Home/UpdateDataCancel", // Action URL
-                            type: "POST", // Method (POST in this case)
-                            data: formData,
-                            success: function (result) {
-                                if (result == "") {
-                                    Swal.fire({
-                                        title: "ยกเลิกรายการ!",
-                                        text: "ยกเลิกรายการสำเร็จ",
-                                        icon: "success"
-                                    }).then(function () {
-                                        // Redirect the user
-                                        window.location.href = "/";
-                                    });
-                                }
-                                else {
-                                    Swal.fire({
-                                        icon: "error",
-                                        title: "Oops...",
-                                        text: result
-                                    }).then(function () {
-                                        location.reload();
-                                    });
-                                }
-                            },
-                            error: function (xhr, status, error) {
-                                console.error(error);
-                            }
-                        });
-                    }
-                });
-            }
-        });
+            });
+        }
 
         $("#btnBypassCustomer").click(function (e) {
 
@@ -500,7 +433,14 @@
         }).then(function (choice) {
             if (!choice.isConfirmed) { return; }
 
-            if ($icon) { $icon.data('busy', true).addClass('is-busy'); }
+            if ($icon) {
+                // เปลี่ยนจรวดเป็นวงหมุน ให้เห็นว่าแถวนี้กำลังทำงานอยู่ ไม่ใช่ปุ่มหายไป
+                $icon.data('busy', true).data('icon', $icon.attr('class'))
+                     .attr('class', 'fa-solid fa-spinner fa-spin row-fix is-busy');
+            }
+
+            // ระหว่างรอคำตอบจากระบบปลายทาง (บางเส้นใช้เวลาหลายวินาที) ต้องมีอะไรบอกว่ากำลังทำงาน
+            var waiting = slipWaiting(opts, code);
 
             $.ajax({
                 url: opts.url,
@@ -518,7 +458,9 @@
                 if (xhr.status === 401) { window.location.href = '/Login'; return; }
                 showActionResult(xhr.status === 403 ? 'blocked' : 'error', opts, code, xhr.responseJSON, xhr.status);
             }).always(function () {
-                if ($icon) { $icon.data('busy', false).removeClass('is-busy'); }
+                if ($icon) {
+                    $icon.data('busy', false).attr('class', $icon.data('icon') || 'fa-solid fa-paper-plane row-fix');
+                }
             });
         });
     }
@@ -549,8 +491,11 @@
                 (o.code ? '<div class="slip-docno">' + esc(o.code) + '</div>' : '') +
                 (sub ? '<div class="slip-docsub">' + esc(sub) + '</div>' : '') +
                 '<div class="slip-cut"></div>' +
-                '<div class="slip-result">' + esc(o.message) + '</div>' +
+                '<div class="slip-result">' +
+                    (o.kind === 'wait' ? '<span class="slip-spin"></span>' : '') +
+                    esc(o.message) + '</div>' +
                 (o.hint ? '<div class="slip-next">' + esc(o.hint) + '</div>' : '') +
+                (o.steps ? stepsHtml(o.steps) : '') +
             '</div>' +
 
             '<div class="slip-foot">' +
@@ -567,6 +512,23 @@
                     '</details>';
         }
         return html;
+    }
+
+    // รายการขั้นตอนของงานที่ทำหลายระบบต่อกัน (เช่น ยกเลิกใบคำขอ)
+    // บอกทีละขั้นว่าอะไรผ่าน อะไรพัง อะไรข้าม และขั้นไหนย้อนกลับไม่ได้
+    function stepsHtml(steps) {
+        var icon = { ok: '✓', failed: '✕', skipped: '–', pending: '○' };
+        var rows = steps.map(function (st) {
+            return '<li class="step step-' + st.status + '">' +
+                   '<span class="step-mark">' + icon[st.status] + '</span>' +
+                   '<span class="step-name">' + esc(st.name) +
+                     (st.irreversible && st.status === 'ok'
+                        ? '<span class="step-lock" title="ขั้นนี้แก้ระบบอื่นไปแล้ว ย้อนกลับเองไม่ได้">ย้อนกลับไม่ได้</span>' : '') +
+                   '</span>' +
+                   (st.detail ? '<span class="step-detail">' + esc(st.detail) + '</span>' : '') +
+                   '</li>';
+        }).join('');
+        return '<ul class="steps">' + rows + '</ul>';
     }
 
     function slipModal(o, buttons) {
@@ -588,6 +550,27 @@
                 });
             }
         }, buttons));
+    }
+
+    // ใบสรุปสถานะ "กำลังดำเนินการ" — ปิดไม่ได้จนกว่าจะมีคำตอบ กันผู้ใช้กดซ้ำหรือปิดไปกลางคัน
+    function slipWaiting(opts, code) {
+        Swal.fire({
+            html: slipHtml({
+                kind: 'wait', code: code,
+                operation: opts.confirmTitle,
+                badge: 'กำลังดำเนินการ',
+                message: 'กำลังส่งรายการไปยังระบบ กรุณารอสักครู่',
+                hint: 'อย่าปิดหน้าต่างนี้จนกว่าจะได้ผลลัพธ์'
+            }),
+            width: '35rem',
+            showConfirmButton: false,
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            buttonsStyling: false,
+            customClass: { popup: 'slip-popup', htmlContainer: 'slip-container' },
+            didOpen: function () { Swal.showLoading(); }
+        });
+        return true;
     }
 
     function confirmHtml(opts, code) {
