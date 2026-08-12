@@ -506,6 +506,18 @@ namespace App.Controllers
             // ปุ่มส่ง NewSale ซ้ำ (แสดงเฉพาะตอนที่ยังไม่มี NewSale)
             bool canRepushNewSale = signedDone && receivedGoods && ou != "STL" && (r.newnum ?? "").Trim() != "เรียบร้อย";
 
+            // ปุ่มแจ้งยกเลิกไปยัง e-contract ซ้ำ
+            // ขั้นสุดท้ายของการยกเลิกคือแจ้งสถานะไปยัง e-contract ถ้าขั้นนั้นล้ม
+            // ใบคำขอจะถูกยกเลิกในระบบเรียบร้อยแล้วแต่ e-contract ยังเห็นสถานะเดิม
+            // เดิมไม่มีทางแจ้งซ้ำเลย (จรวดส่งสถานะซ้ำครอบคลุมแค่ CLOSED) ต้องให้คนไปแก้ให้
+            //
+            // ดูจากผลที่ระบบบันทึกไว้ตอนแจ้ง ไม่ใช่เดาจากสถานะสัญญา
+            // เพราะการเรียกเส้นแจ้งสถานะไม่ได้เปลี่ยนคอลัมน์ไหนฝั่งสัญญาให้มองเห็นได้เลย
+            // (ทดสอบแล้ว ปลายทางตอบ PASS แต่ signedStatus คงเดิม) ถ้าเดาจากตรงนั้นจรวดจะไม่มีวันหาย
+            // ใบเก่าที่ยกเลิกก่อนมีการบันทึกผลจะไม่มีจรวด เพราะไม่รู้จริง ๆ ว่าแจ้งไปถึงหรือไม่
+            bool canRenotifyCancel = status == "CANCELLED"
+                && string.Equals((r.CancelNotifyStatus ?? "").Trim(), "FAILED", StringComparison.OrdinalIgnoreCase);
+
             return new SearchRowDto
             {
                 ApplicationCode = r.ApplicationCode,
@@ -536,6 +548,7 @@ namespace App.Controllers
                 CanRegisImei = canRegisImei,
                 CanRepushNewSale = canRepushNewSale,
                 CanFixDuplicateContract = (r.numdoc ?? "").Trim() == "พบรายการซ้ำ",
+                CanRenotifyCancel = canRenotifyCancel,
                 RegisBlockedReason = regisBlockedReason
             };
         }
@@ -687,6 +700,7 @@ namespace App.Controllers
             var newSales = QueryInChunks<NewSaleRow>(connection, BuildNewSaleSql(), "accounts", accounts);
             var payments = QueryInChunks<PaymentRow>(connection, BuildPaymentSql(), "accounts", accounts);
             var regis = QueryInChunks<RegisRow>(connection, BuildRegisSql(), "serials", serials);
+            var cancelNotify = QueryInChunks<CancelNotifyRow>(connection, BuildCancelNotifySql(), "codes", codes);
 
             Log.Information("ค้นหา: ข้อมูลประกอบ {Ms} ms (สัญญา {C} / newsale {N} / payment {P} / regis {R}) — รวม {Total} ms",
                 sw.ElapsedMilliseconds, contracts.Count, newSales.Count, payments.Count, regis.Count, swTotal.ElapsedMilliseconds);
@@ -695,8 +709,15 @@ namespace App.Controllers
             var newSaleByAcc = newSales.GroupBy(n => n.ARM_ACC_NO).ToDictionary(g => g.Key, g => g.First());
             var paymentByAcc = payments.GroupBy(p => p.ARM_ACC_NO).ToDictionary(g => g.Key, g => g.First());
             var regisBySerial = regis.GroupBy(r => r.IMEI).ToDictionary(g => g.Key, g => g.First());
+            var notifyByCode = cancelNotify.GroupBy(n => n.OrderID).ToDictionary(g => g.Key, g => g.First().StatusCode ?? "");
 
-            return pageRows.Select(r => Compose(r, contractByCode, newSaleByAcc, paymentByAcc, regisBySerial)).ToList();
+            return pageRows.Select(r =>
+            {
+                var item = Compose(r, contractByCode, newSaleByAcc, paymentByAcc, regisBySerial);
+                notifyByCode.TryGetValue(r.ApplicationCode ?? "", out var notifyStatus);
+                item.CancelNotifyStatus = notifyStatus ?? "";
+                return item;
+            }).ToList();
         }
 
         /// <summary>จำนวนคีย์สูงสุดต่อคำสั่ง — ต่ำกว่าเพดานพารามิเตอร์ 2,100 ของ SQL Server พอสมควร</summary>
@@ -833,12 +854,19 @@ namespace App.Controllers
             public string? Status { get; set; }
         }
 
+        private class CancelNotifyRow
+        {
+            public string OrderID { get; set; } = "";
+            public string? StatusCode { get; set; }
+        }
+
         // SQL ทั้งหมดย้ายไปอยู่ที่ App/Data/SearchSql.cs เพื่อให้งานอุ่นข้อมูลเบื้องหลังใช้ชุดเดียวกัน
         private string BuildPageSql(string orderBy) => App.Data.SearchSql.Page(DATABASEK2, orderBy);
         private string BuildContractSql() => App.Data.SearchSql.Contract(DATABASEK2, SGCESIGNATURE);
         private string BuildNewSaleSql() => App.Data.SearchSql.NewSale(DATABASEK2);
         private string BuildPaymentSql() => App.Data.SearchSql.Payment(DATABASEK2);
         private string BuildRegisSql() => App.Data.SearchSql.Regis(DATABASEK2);
+        private string BuildCancelNotifySql() => App.Data.SearchSql.CancelNotify(DATABASEK2);
 
 
         // ขนาดหน้าเริ่มต้นและตัวเลือกที่อนุญาต (จำกัดไว้เพื่อไม่ให้ยิงค่าใหญ่ ๆ เข้ามาทาง query string)
@@ -1024,31 +1052,25 @@ namespace App.Controllers
                         remark = _FormConfirmModel.Remark + "" + _FormConfirmModel.Other
                     };
 
-                    Log.Debug("API BODY REQUEST : " + JsonConvert.SerializeObject(requestBody));
+                    const string renotifyHint = " — ใบคำขอถูกยกเลิกเรียบร้อยแล้ว แจ้งซ้ำได้ที่จรวดในคอลัมน์สถานะ หน้ารายการค้นหา";
 
-                    using (HttpClient client = new HttpClient())
+                    var notify = await _api.PostJsonAsync("esig", "/sgesig/Service/C100_Status", requestBody,
+                                                          $"แจ้งยกเลิก [{_GetApplicationRespone.ApplicationCode}] โดย {actor}");
+
+                    if (!notify.Reached)
                     {
-                        string jsonBody = JsonConvert.SerializeObject(requestBody);
-
-                        client.DefaultRequestHeaders.Add("apikey", ApiKey);
-                        client.DefaultRequestHeaders.Add("user", "DEV");
-
-                        var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                        HttpResponseMessage responseDevice = await client.PostAsync(SGAPIESIG + "/sgesig/Service/C100_Status", content);
-                        if (stepNotify != null)
-                        {
-                            if (responseDevice.IsSuccessStatusCode) steps.Ok(stepNotify);
-                            else steps.Failed(stepNotify, $"ระบบปลายทางตอบกลับ HTTP {(int)responseDevice.StatusCode}");
-                        }
-                        int DeviceStatusCode = (int)responseDevice.StatusCode;
-
-                        Log.Debug("API BODY RESPONE : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
-
-                        if (responseDevice.IsSuccessStatusCode)
-                        {
-                            var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
-
-                        }
+                        steps.Failed(stepNotify, "ติดต่อ e-contract ไม่ได้" + renotifyHint);
+                        await RecordCancelNotifyAsync(_GetApplicationRespone.ApplicationCode, false, notify.TransportError);
+                    }
+                    else if (!notify.IsSuccess)
+                    {
+                        steps.Failed(stepNotify, DescribeError(notify.Body) + renotifyHint);
+                        await RecordCancelNotifyAsync(_GetApplicationRespone.ApplicationCode, false, notify.Body);
+                    }
+                    else
+                    {
+                        steps.Ok(stepNotify);
+                        await RecordCancelNotifyAsync(_GetApplicationRespone.ApplicationCode, true, null);
                     }
                 }
                 //}
@@ -1070,6 +1092,37 @@ namespace App.Controllers
         }
 
         /// <summary>ประกอบผลลัพธ์การยกเลิกให้ผู้ใช้เห็นทุกขั้น พร้อมเตือนเมื่อมีขั้นที่ย้อนกลับไม่ได้ทำไปแล้ว</summary>
+        /// <summary>
+        /// บันทึกว่าแจ้งยกเลิกไปยัง e-contract สำเร็จหรือไม่
+        ///
+        /// จำเป็นเพราะเส้นแจ้งสถานะไม่ได้เปลี่ยนข้อมูลฝั่งสัญญาให้มองเห็นได้
+        /// ถ้าไม่บันทึกไว้เอง จะไม่มีทางรู้ทีหลังว่าใบไหนแจ้งไปถึงแล้วบ้าง
+        /// </summary>
+        private async Task RecordCancelNotifyAsync(string? code, bool ok, string? detail)
+        {
+            if (string.IsNullOrWhiteSpace(code)) return;
+
+            try
+            {
+                using var connection = new SqlConnection(strConnString);
+                await connection.ExecuteAsync(new CommandDefinition(
+                    $@"INSERT INTO {DATABASEK2}.[LOG_TRANSACTTION_SGFINANCE] (OrderID, StatusCode, StatusDesc, CreateDate, [Type])
+                       VALUES (@OrderID, @StatusCode, @StatusDesc, GETDATE(), @Type)",
+                    new
+                    {
+                        OrderID = code,
+                        StatusCode = ok ? "SUCCESS" : "FAILED",
+                        StatusDesc = detail ?? "",
+                        Type = App.Data.SearchSql.CancelNotifyType
+                    }, commandTimeout: 60));
+            }
+            catch (Exception ex)
+            {
+                // บันทึกไม่ได้ก็ไม่ควรทำให้การยกเลิกทั้งงานล้ม แค่บอกไว้ใน log ของแอป
+                Log.Error(ex, "บันทึกผลการแจ้งยกเลิกไม่สำเร็จ: {Code}", code);
+            }
+        }
+
         private IActionResult BuildCancelResult(string? code, CancelStepRecorder steps, string error)
         {
             bool ok = string.IsNullOrWhiteSpace(error) && !steps.AnyFailed;
@@ -1294,17 +1347,22 @@ namespace App.Controllers
                 var notify = await _api.PostJsonAsync("esig", "/sgesig/Service/C100_Status", requestBody,
                                                       $"แจ้งยกเลิกข้ามวัน [{code}] โดย {actor}");
 
+                const string renotifyHint = " — ใบคำขอถูกยกเลิกเรียบร้อยแล้ว แจ้งซ้ำได้ที่จรวดในคอลัมน์สถานะ หน้ารายการค้นหา";
+
                 if (!notify.Reached)
                 {
-                    steps.Failed(stepNotify, "ติดต่อ e-contract ไม่ได้ — " + notify.TransportError);
+                    steps.Failed(stepNotify, "ติดต่อ e-contract ไม่ได้" + renotifyHint);
+                    await RecordCancelNotifyAsync(code, false, notify.TransportError);
                 }
                 else if (!notify.IsSuccess)
                 {
-                    steps.Failed(stepNotify, DescribeError(notify.Body));
+                    steps.Failed(stepNotify, DescribeError(notify.Body) + renotifyHint);
+                    await RecordCancelNotifyAsync(code, false, notify.Body);
                 }
                 else
                 {
                     steps.Ok(stepNotify);
+                    await RecordCancelNotifyAsync(code, true, null);
                 }
 
                 return BuildCancelResult(code, steps, ResultDescription);
@@ -1693,6 +1751,77 @@ namespace App.Controllers
         {
             public string? StatusDesc { get; set; }
             public string? Accountno { get; set; }
+        }
+
+        /// <summary>
+        /// แจ้งยกเลิกไปยัง e-contract ซ้ำ
+        ///
+        /// ใช้เมื่อยกเลิกใบคำขอสำเร็จแล้วแต่ขั้นสุดท้าย (แจ้ง e-contract) ล้มเหลว
+        /// ทำให้ใบคำขอเป็น CANCELLED ในระบบ แต่ e-contract ยังเห็นสถานะเดิม
+        /// เดิมไม่มีทางแจ้งซ้ำ ต้องรอให้คนไปแก้ให้ทีละใบ
+        /// </summary>
+        [InvalidateSearchCache]
+        [RequireLogin]
+        [HttpPost]
+        public async Task<IActionResult> RenotifyCancel([FromBody] C100StatusRq request)
+        {
+            var actor = HttpContext.Session.GetString("EMP_CODE");
+            var code = request?.ApplicationCode;
+
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return BadRequest(ActionResultDto.Fail("ไม่พบเลขที่ใบคำขอ กรุณาค้นหาใหม่อีกครั้ง"));
+            }
+
+            // อ่านสถานะจริงก่อนส่ง กันกรณีหน้าจอค้างอยู่กับข้อมูลเก่า
+            // แล้วเผลอแจ้ง e-contract ว่ายกเลิก ทั้งที่ใบคำขอยังไม่ได้ถูกยกเลิก
+            string status;
+            using (var connection = new SqlConnection(strConnString))
+            {
+                status = (await connection.QueryAsync<string>(new CommandDefinition(
+                    $"SELECT ApplicationStatusID FROM {DATABASEK2}.[Application] WITH (NOLOCK) WHERE ApplicationCode = @ApplicationCode",
+                    new { ApplicationCode = code }, commandTimeout: 60))).FirstOrDefault() ?? "";
+            }
+
+            if (string.IsNullOrWhiteSpace(status))
+            {
+                return NotFound(ActionResultDto.Fail($"ไม่พบใบคำขอ {code} ในระบบ"));
+            }
+
+            if (!string.Equals(status.Trim(), "CANCELLED", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(ActionResultDto.Fail(
+                    $"ใบคำขอ {code} ยังไม่ได้ถูกยกเลิก (สถานะปัจจุบันคือ {status.Trim()}) จึงยังแจ้งยกเลิกไม่ได้"));
+            }
+
+            var requestBody = new
+            {
+                applicationCode = code,
+                applicationStatus = "CANCELLED",
+                approvalStatus = "CANCELLED",
+                approvalDatetime = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                remark = "แจ้งยกเลิกซ้ำจากหน้าตรวจสอบใบคำขอ"
+            };
+
+            var response = await _api.PostJsonAsync("esig", "/sgesig/Service/C100_Status", requestBody,
+                                                    $"แจ้งยกเลิกซ้ำ [{code}] โดย {actor}");
+
+            if (!response.Reached)
+            {
+                await RecordCancelNotifyAsync(code, false, response.TransportError);
+                return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
+                    "ตอนนี้ติดต่อ e-contract ไม่ได้ กรุณาลองใหม่อีกครั้งในอีกสักครู่", response.TransportError));
+            }
+
+            if (!response.IsSuccess)
+            {
+                await RecordCancelNotifyAsync(code, false, response.Body);
+                return StatusCode(StatusCodes.Status502BadGateway, ActionResultDto.Fail(
+                    "e-contract ไม่รับรายการนี้ สถานะฝั่งสัญญาจึงยังไม่ถูกอัปเดต", response.Body));
+            }
+
+            await RecordCancelNotifyAsync(code, true, null);
+            return Ok(ActionResultDto.Success($"แจ้งยกเลิกใบคำขอ {code} ไปยัง e-contract แล้ว", response.Body));
         }
 
         [InvalidateSearchCache]

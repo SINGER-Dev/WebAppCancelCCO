@@ -88,6 +88,23 @@ SELECT ARM_ACC_NO, paynum, ARM_RECEIPT_STAT FROM (
     WHERE p.CREATED_USER = 'SG Finance' AND p.ARM_ACC_NO IN @accounts
 ) x WHERE rn = 1;";
 
+        /// <summary>
+        /// ผลล่าสุดของการแจ้งยกเลิกไปยัง e-contract
+        ///
+        /// ขั้นสุดท้ายของการยกเลิกคือแจ้งสถานะไปยัง e-contract ถ้าขั้นนั้นล้ม ใบคำขอจะถูกยกเลิก
+        /// ในระบบเรียบร้อยแล้วแต่ e-contract ยังเห็นสถานะเดิม — และดูจากข้อมูลฝั่งสัญญาไม่ออก
+        /// เพราะการเรียกเส้นนี้ไม่ได้เปลี่ยนคอลัมน์ไหนที่มองเห็นได้เลย จึงต้องบันทึกผลไว้เองตอนที่ทำ
+        /// </summary>
+        public const string CancelNotifyType = "CCO_CANCEL_NOTIFY";
+
+        public static string CancelNotify(string DATABASEK2) => @$"
+SELECT OrderID, StatusCode FROM (
+    SELECT l.OrderID, l.StatusCode,
+           ROW_NUMBER() OVER (PARTITION BY l.OrderID ORDER BY l.No DESC) AS rn
+    FROM {DATABASEK2}.[LOG_TRANSACTTION_SGFINANCE] l WITH (NOLOCK)
+    WHERE l.[Type] = '{CancelNotifyType}' AND l.OrderID IN @codes
+) x WHERE rn = 1;";
+
         public static string Regis(string DATABASEK2) => @$"
 SELECT IMEI, [Status] FROM (
     SELECT r.IMEI, r.[Status],

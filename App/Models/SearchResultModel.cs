@@ -74,6 +74,9 @@
         /// <summary>ใบนี้มีสัญญาซ้ำ จึงกดซ่อมได้</summary>
         public bool CanFixDuplicateContract { get; set; }
 
+        /// <summary>ใบคำขอถูกยกเลิกแล้ว แต่ e-contract ยังไม่รับรู้ จึงต้องแจ้งซ้ำ</summary>
+        public bool CanRenotifyCancel { get; set; }
+
         /// <summary>เหตุผลที่ยังกดลงทะเบียนเครื่องไม่ได้ (null = กดได้ หรือทำไปแล้ว) — ใช้อธิบายบนหน้าจอ</summary>
         public string? RegisBlockedReason { get; set; }
     }

@@ -518,6 +518,18 @@
     }
 
     // ปุ่มซ่อมในแต่ละแถว — ผูกแบบ delegated ครั้งเดียว จะได้ไม่ต้องผูกใหม่ทุกครั้งที่วาดตาราง
+            $(document).on('click', '.RenotifyCancel', function () {
+                var $icon = $(this);
+                runFixAction({
+                    $icon: $icon,
+                    url: '/Home/RenotifyCancel',
+                    body: { ApplicationCode: $icon.data('applicationcode') },
+                    confirmTitle: 'แจ้งยกเลิกไปยัง e-contract อีกครั้ง',
+                    confirmDetail: 'ใบคำขอนี้ยกเลิกในระบบแล้ว แต่ e-contract ยังเห็นสถานะเดิม ระบบจะแจ้งการยกเลิกไปให้ใหม่',
+                    successTitle: 'แจ้งยกเลิกไปยัง e-contract แล้ว'
+                });
+            });
+
             $(document).on('click', '.C100StatusClosed', function () {
                 var $icon = $(this);
                 runFixAction({
@@ -759,6 +771,10 @@
         var statusCell = statusBadge(r.applicationStatusId)
             + (r.canPushStatusClosed
                 ? fixIcon('C100StatusClosed', r.applicationCode, 'ส่งสถานะ CLOSED ไปปลายทางอีกครั้ง')
+                : '')
+            + (r.canRenotifyCancel
+                ? fixIcon('RenotifyCancel', r.applicationCode,
+                          'ใบคำขอนี้ยกเลิกแล้วแต่ e-contract ยังไม่รับรู้ — กดเพื่อแจ้งยกเลิกซ้ำ')
                 : '');
 
         var contractCell =
