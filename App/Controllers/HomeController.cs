@@ -388,7 +388,7 @@ namespace App.Controllers
                 List<ApplicationResponeModel> rows;
                 try
                 {
-                    rows = RunSearch(_ApplicationModel, (page - 1) * pageSize, pageSize, sort, dir);
+                    rows = await RunSearch(_ApplicationModel, (page - 1) * pageSize, pageSize, sort, dir);
                 }
                 catch (Exception ex)
                 {
@@ -559,7 +559,7 @@ namespace App.Controllers
         /// จะเห็นข้อมูลแค่หน้าเดียว
         /// </summary>
         [HttpPost]
-        public IActionResult ExportSearch(ApplicationRq _ApplicationModel)
+        public async Task<IActionResult> ExportSearch(ApplicationRq _ApplicationModel)
         {
             if (HttpContext.Session.GetString("EMP_CODE") == null)
             {
@@ -569,7 +569,7 @@ namespace App.Controllers
             List<ApplicationResponeModel> rows;
             try
             {
-                rows = RunSearch(_ApplicationModel, 0, ExportMaxRows, "date", "desc");
+                rows = await RunSearch(_ApplicationModel, 0, ExportMaxRows, "date", "desc");
             }
             catch (Exception ex)
             {
@@ -629,7 +629,7 @@ namespace App.Controllers
         /// รันคำค้นเดียวกันกับที่หน้าจอใช้ โดยระบุช่วงแถวที่ต้องการ (offset/take)
         /// ใช้ร่วมกันระหว่างการแสดงผลทีละหน้าและการดาวน์โหลดทั้งผลลัพธ์
         /// </summary>
-        private List<ApplicationResponeModel> RunSearch(ApplicationRq model, int offset, int take, string sort, string dir)
+        private async Task<List<ApplicationResponeModel>> RunSearch(ApplicationRq model, int offset, int take, string sort, string dir)
         {
             // ปรับช่วงวันที่ก่อนส่งเข้า SQL
             // - ถ้าระบุ key เจาะจง (เลขที่ใบคำขอ/สัญญา/serial/เลขบัตร) → ไม่ต้องจำกัดวันที่ ค้นได้ทั้งหมด
@@ -659,13 +659,13 @@ namespace App.Controllers
             }
 
             using var connection = new SqlConnection(strConnString);
-            connection.Open();
+            await connection.OpenAsync();
 
             // ---- รอบที่ 1: คัดเฉพาะใบคำขอของหน้านี้ (≤ 100 แถว) ----
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var swTotal = System.Diagnostics.Stopwatch.StartNew();
 
-            var pageRows = connection.Query<PageRow>(new CommandDefinition(BuildPageSql(BuildOrderBy(sort, dir)), new
+            var pageRows = (await connection.QueryAsync<PageRow>(new CommandDefinition(BuildPageSql(BuildOrderBy(sort, dir)), new
             {
                 startDate,
                 endDate,
@@ -679,7 +679,7 @@ namespace App.Controllers
                 StatusRegis = Nz(model.StatusRegis),
                 offset,
                 pageSize = take
-            }, commandTimeout: 120)).ToList();
+            }, commandTimeout: 120))).ToList();
 
             Log.Information("ค้นหา: เลือกหน้า {Ms} ms ({Rows} แถว)", sw.ElapsedMilliseconds, pageRows.Count);
 
@@ -696,11 +696,23 @@ namespace App.Controllers
 
             // ต้องแบ่งรายการคีย์เป็นก้อน — SQL Server รับพารามิเตอร์ได้สูงสุด 2,100 ตัวต่อคำสั่ง
             // ตอนแสดงผลทีละหน้าไม่เคยชน แต่ตอนดาวน์โหลดทั้งหมด (หลายหมื่นแถว) จะชนทันที
-            var contracts = QueryInChunks<ContractRow>(connection, BuildContractSql(), "codes", codes);
-            var newSales = QueryInChunks<NewSaleRow>(connection, BuildNewSaleSql(), "accounts", accounts);
-            var payments = QueryInChunks<PaymentRow>(connection, BuildPaymentSql(), "accounts", accounts);
-            var regis = QueryInChunks<RegisRow>(connection, BuildRegisSql(), "serials", serials);
-            var cancelNotify = QueryInChunks<CancelNotifyRow>(connection, BuildCancelNotifySql(), "codes", codes);
+            //
+            // ยิงทั้ง 5 ตัวพร้อมกัน — ไม่มีตัวไหนพึ่งผลของกันเลย คีย์ที่ใช้คำนวณเสร็จหมดแล้วข้างบน
+            // ของเดิมยิงต่อกันทีละตัวบน connection เดียว เวลาจึงเป็นผลรวมของทั้ง 5 (วัดได้ ~490 ms)
+            // ทั้งที่ควรเสียแค่เท่าตัวที่ช้าที่สุด · ต้องแยก connection เพราะ SqlConnection ใช้ข้ามเธรดไม่ได้
+            var contractsTask = QueryInChunksAsync<ContractRow>(BuildContractSql(), "codes", codes);
+            var newSalesTask = QueryInChunksAsync<NewSaleRow>(BuildNewSaleSql(), "accounts", accounts);
+            var paymentsTask = QueryInChunksAsync<PaymentRow>(BuildPaymentSql(), "accounts", accounts);
+            var regisTask = QueryInChunksAsync<RegisRow>(BuildRegisSql(), "serials", serials);
+            var cancelNotifyTask = QueryInChunksAsync<CancelNotifyRow>(BuildCancelNotifySql(), "codes", codes);
+
+            await Task.WhenAll(contractsTask, newSalesTask, paymentsTask, regisTask, cancelNotifyTask);
+
+            var contracts = contractsTask.Result;
+            var newSales = newSalesTask.Result;
+            var payments = paymentsTask.Result;
+            var regis = regisTask.Result;
+            var cancelNotify = cancelNotifyTask.Result;
 
             Log.Information("ค้นหา: ข้อมูลประกอบ {Ms} ms (สัญญา {C} / newsale {N} / payment {P} / regis {R}) — รวม {Total} ms",
                 sw.ElapsedMilliseconds, contracts.Count, newSales.Count, payments.Count, regis.Count, swTotal.ElapsedMilliseconds);
@@ -723,16 +735,25 @@ namespace App.Controllers
         /// <summary>จำนวนคีย์สูงสุดต่อคำสั่ง — ต่ำกว่าเพดานพารามิเตอร์ 2,100 ของ SQL Server พอสมควร</summary>
         private const int KeyChunkSize = 1000;
 
-        /// <summary>ยิงคำสั่งเดิมซ้ำเป็นก้อน ๆ ตามจำนวนคีย์ แล้วรวมผลลัพธ์</summary>
-        private static List<T> QueryInChunks<T>(SqlConnection connection, string sql, string paramName, List<string> keys)
+        /// <summary>
+        /// ยิงคำสั่งเดิมซ้ำเป็นก้อน ๆ ตามจำนวนคีย์ แล้วรวมผลลัพธ์
+        /// เปิด connection ของตัวเองเพราะถูกเรียกพร้อมกันหลายตัว และ SqlConnection ใช้ข้ามเธรดไม่ได้
+        /// (connection pool ของ ADO.NET จัดการให้อยู่แล้ว ไม่ได้เปิดต่อจริงใหม่ทุกครั้ง)
+        /// </summary>
+        private async Task<List<T>> QueryInChunksAsync<T>(string sql, string paramName, List<string> keys)
         {
             var result = new List<T>();
+            if (keys.Count == 0) return result;
+
+            using var connection = new SqlConnection(strConnString);
+            await connection.OpenAsync();
+
             for (int i = 0; i < keys.Count; i += KeyChunkSize)
             {
                 var chunk = keys.GetRange(i, Math.Min(KeyChunkSize, keys.Count - i));
                 var parameters = new DynamicParameters();
                 parameters.Add(paramName, chunk);
-                result.AddRange(connection.Query<T>(new CommandDefinition(sql, parameters, commandTimeout: 180)));
+                result.AddRange(await connection.QueryAsync<T>(new CommandDefinition(sql, parameters, commandTimeout: 180)));
             }
             return result;
         }
