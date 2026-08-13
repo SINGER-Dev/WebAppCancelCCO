@@ -1043,9 +1043,6 @@ namespace App.Controllers
                 //_CCOWebService.id = _GetApplicationRespone.ApplicationID;
                 //MessageModel _MessageModel = await CCOWebService(_CCOWebService);
 
-                //Cancel EZ Tax
-                //GetTokenEZTaxRp _GetTokenEZTaxRp = await GetTokenEZTax();
-
                 //Cancel econtract
 
                 using (SqlConnection connection = new SqlConnection(strConnString))
@@ -1571,52 +1568,6 @@ namespace App.Controllers
         }
 
         [HttpPost]
-        public async Task<GetTokenEZTaxRp> GetTokenEZTax()
-        {
-
-            GetTokenEZTaxRp _GetTokenEZTaxRp = new GetTokenEZTaxRp();
-            int i = 1;
-            try
-            {
-
-                var body = "";
-                ServicePointManager.Expect100Continue = true;
-                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-                var client = new RestClient(UrlEztax + "/api/auth");
-                client.Timeout = 60000;
-                var request = new RestRequest(Method.POST);
-                var Arr_Body = new
-                {
-                    username = UsernameEztax,
-                    password = PasswordEztax,
-                    client_id = ClientIdEztax
-                };
-                body = JsonConvert.SerializeObject(Arr_Body);
-                request.AddParameter("application/json", body, ParameterType.RequestBody);
-                IRestResponse response = client.Execute(request);
-                if ("OK" == response.StatusCode.ToString().ToUpper())
-                {
-
-                    _GetTokenEZTaxRp = JsonConvert.DeserializeObject<GetTokenEZTaxRp>(response.Content);
-                    _GetTokenEZTaxRp.StatusCode = "PASS";
-                    Log.Debug(JsonConvert.SerializeObject(_GetTokenEZTaxRp));
-                }
-                else
-                {
-                    _GetTokenEZTaxRp.StatusCode = response.StatusCode.ToString();
-
-                    Log.Debug(JsonConvert.SerializeObject(_GetTokenEZTaxRp));
-                }
-                return _GetTokenEZTaxRp;
-            }
-            catch (Exception ex)
-            {
-                _GetTokenEZTaxRp.StatusCode = ex.Message;
-                Log.Debug(JsonConvert.SerializeObject(_GetTokenEZTaxRp));
-                return _GetTokenEZTaxRp;
-            }
-
-        }
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
         public IActionResult Error()
         {
@@ -2473,80 +2424,6 @@ namespace App.Controllers
 
         }
 
-        [RequireLogin]
-        [HttpPost]
-        [Route("SendEmail")]
-        public async Task<SendEmailRespone> SendEmail([FromBody] SendEmailRq sendEmailRq)
-        {
-            Log.Debug("SendEmail By " + HttpContext.Session.GetString("EMP_CODE") + " | " + HttpContext.Session.GetString("FullName") + " : " + JsonConvert.SerializeObject(sendEmailRq));
-            SendEmailRespone sendEmailRespone = new SendEmailRespone();
-            try
-            {
-
-                GetApplication getApplication = new GetApplication();
-                getApplication.ApplicationCode = sendEmailRq.ApplicationCode;
-                GetApplicationRespone _GetApplicationRespone = await GetApplication(getApplication);
-
-                SenEmailBody senEmailBody = new SenEmailBody();
-                
-
-                senEmailBody.fromName = "AutomailSystem@sgcapital.co.th";
-                senEmailBody.fromEmail = "AutomailSystem@sgcapital.co.th";
-
-                SenEmailTo senEmailTo = new SenEmailTo();
-                senEmailTo.Name = "RattanapongT";
-                senEmailTo.Email = "RattanapongT@singerthai.co.th";
-                senEmailBody.to.Add(senEmailTo);
-
-                SenEmailTo senEmailToCC1 = new SenEmailTo();
-                senEmailToCC1.Name = "SiripornK";
-                senEmailToCC1.Email = "SiripornK@singerthai.co.th";
-                senEmailBody.cc.Add(senEmailToCC1);
-
-                senEmailBody.subject = $@"[ระบบตรวจสอบใบคำขอ SG Finance+] มีการยกเลิกใบคำขอเลขที่ {_GetApplicationRespone.ApplicationCode}  บัญชีเลขที่ {_GetApplicationRespone.AccountNo}";
-                senEmailBody.content = $@"
-เรียนผู้เกี่ยวข้องทุกท่าน
-
-มีการยกเลิกใบคำขอเลขที่ {_GetApplicationRespone.ApplicationCode} 
-บัญชีเลขที่ {_GetApplicationRespone.AccountNo} โดย เทสระบบ 
-เหตุผล {sendEmailRq.Remark} 
-กรุณาดำเนินการในส่วนที่เกี่ยวข้องต่อไปด้วย
-
-=========================================
-ขอแสดงความนับถือ
-=========================================
-                    ";
-
-
-                var requestBody = senEmailBody;
-
-                using (HttpClient client = new HttpClient())
-                {
-                    string jsonBody = JsonConvert.SerializeObject(requestBody);
-
-                    var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-                    HttpResponseMessage responseDevice = await client.PostAsync("https://sg-posservice.singerthai.co.th:10082/v1/Mail/Mail", content);
-                    int DeviceStatusCode = (int)responseDevice.StatusCode;
-                    Log.Debug("API RETURN : " + JsonConvert.SerializeObject(responseDevice.Content.ReadAsStringAsync()));
-                    if (responseDevice.IsSuccessStatusCode)
-                    {
-                        var jsonResponseDevice = await responseDevice.Content.ReadAsStringAsync();
-
-                        sendEmailRespone = JsonConvert.DeserializeObject<SendEmailRespone>(jsonResponseDevice);
-                    }
-                }
-
-                Log.Debug("RETURN : " + JsonConvert.SerializeObject(sendEmailRespone));
-                return sendEmailRespone;
-            }
-            catch (Exception ex)
-            {
-                sendEmailRespone.statusCode = ex.Message;
-                Log.Debug("RETURN : " + JsonConvert.SerializeObject(sendEmailRespone));
-                return sendEmailRespone;
-            }
-        }
-        
         [RequireLogin]
         public async Task<SGBCancelRespone> SGBCancel([FromBody] GetApplication _GetApplication)
         {
