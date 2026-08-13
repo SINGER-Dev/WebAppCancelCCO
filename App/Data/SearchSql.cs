@@ -25,6 +25,11 @@ FROM {DATABASEK2}.[Application] a WITH (NOLOCK)
 INNER JOIN {DATABASEK2}.[ApplicationExtend] appex WITH (NOLOCK) ON appex.ApplicationID = a.ApplicationID
 LEFT JOIN {DATABASEK2}.[Customer] cus WITH (NOLOCK) ON cus.CustomerID = a.CustomerID
 WHERE a.ApplicationDate >= '2024-05-01'
+  -- ตัดขอบล่างด้วย ApplicationID เพื่อให้ใช้ clustered index (PK_Application) ได้
+  -- ตาราง Application ไม่มี index บน ApplicationDate การกรองด้วยวันที่อย่างเดียวจึงต้องกวาดทั้งตาราง
+  -- ค่า @idLowerBound มาจาก ApplicationIdBounds ซึ่งรับประกันว่าไม่ตัดแถวที่ควรเจอทิ้ง
+  -- (0 = ไม่ใส่เงื่อนไข ใช้เมื่อไม่ได้ระบุวันที่ หรือหาค่าขอบไม่ได้)
+  AND (@idLowerBound = 0 OR a.ApplicationID >= @idLowerBound)
   AND (@TodayStart      IS NULL OR a.ApplicationDate >= @TodayStart)
   AND (@TomorrowStart   IS NULL OR a.ApplicationDate <  @TomorrowStart)
   AND (@status          IS NULL OR a.ApplicationStatusID = @status)

@@ -37,6 +37,7 @@ namespace App.Controllers
         private static readonly HttpClient client = new HttpClient();
         private readonly IDownstreamApi _api;
         private readonly IMemoryCache _cache;
+        private readonly ApplicationIdBounds _idBounds;
 
         // อายุของผลค้นหาที่เก็บไว้ — ตั้งได้จาก config (Search:CacheSeconds), 0 = ปิด cache
         //
@@ -101,10 +102,12 @@ namespace App.Controllers
 
         public static void ConfigureCache(int seconds) => _cacheSeconds = Math.Max(0, seconds);
 
-        public HomeController(ILogger<HomeController> logger, IDownstreamApi api, IMemoryCache cache, IConfiguration configuration)
+        public HomeController(ILogger<HomeController> logger, IDownstreamApi api, IMemoryCache cache,
+                              IConfiguration configuration, ApplicationIdBounds idBounds)
         {
             _api = api;
             _cache = cache;
+            _idBounds = idBounds;
 
             // เดิมเปิดไฟล์ appsettings จากดิสก์แล้วแปลง JSON ใหม่ทุก request
             // ตอนนี้ใช้ค่าที่แอปอ่านไว้ตั้งแต่ตอนเปิดระบบแทน
@@ -682,6 +685,12 @@ namespace App.Controllers
                 }
             }
 
+            // ตาราง Application ไม่มี index บน ApplicationDate การกรองด้วยวันที่จึงต้องกวาดทั้งตาราง
+            // แปลงวันที่เริ่มค้นเป็นขอบล่างของ ApplicationID เพื่อให้ใช้ clustered index ได้แทน
+            int idLowerBound = startDate == null
+                ? ApplicationIdBounds.NoBound
+                : await _idBounds.GetLowerBoundAsync(startDate);
+
             using var connection = new SqlConnection(strConnString);
             await connection.OpenAsync();
 
@@ -701,6 +710,7 @@ namespace App.Controllers
                 CustomerID = customerId,
                 CustomerName = Nz(model.CustomerName),
                 StatusRegis = Nz(model.StatusRegis),
+                idLowerBound,
                 offset,
                 pageSize = take
             }, commandTimeout: 120))).ToList();

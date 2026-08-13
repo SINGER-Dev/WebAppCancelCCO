@@ -53,6 +53,12 @@ AddDownstream("sgb", cs["SGBCancelApi"], c =>
 
 builder.Services.AddSingleton<IDownstreamApi, DownstreamApi>();
 
+// ตัวแปลง "วันที่เริ่มค้นหา" เป็น "ApplicationID ต่ำสุด" เพื่อให้ query หน้าค้นหาใช้ clustered index ได้
+// เป็น singleton เพราะค่าที่หาได้ใช้ซ้ำได้ตลอดอายุของโปรเซส (ดูเหตุผลใน ApplicationIdBounds)
+builder.Services.AddSingleton(sp => new ApplicationIdBounds(
+    cs["strConnString"] ?? "",
+    builder.Configuration.GetSection("ConnectionStrings")["DATABASEK2"] ?? ""));
+
 // เก็บผลค้นหาของเคสที่ใช้บ่อย (วันนี้ หน้าแรก) ไว้ในหน่วยความจำสั้น ๆ
 builder.Services.AddMemoryCache();
 

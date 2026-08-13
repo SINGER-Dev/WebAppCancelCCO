@@ -288,8 +288,12 @@ https://cdn.jsdelivr.net/npm/sweetalert2@11.11.0/dist/sweetalert2.min.css
             transform: translateX(-50%);
         }
 
-        /* ตาราง: หัวตารางลอยค้างไว้ตอนเลื่อนดูรายการยาว ๆ */
-        #searchTableWrap { max-height: calc(100vh - 22rem); overflow: auto; }
+        /* ตาราง: แสดงทุกแถวให้ครบ ไม่มีแถบเลื่อนซ้อนอยู่ข้างใน
+           ของเดิมจำกัดความสูงไว้ที่ calc(100vh - 22rem) แล้วให้เลื่อนในกรอบ
+           พอจอเตี้ย กรอบจะเหลือแค่ไม่กี่แถว ต้องเลื่อนสองชั้น (ในกรอบ + ทั้งหน้า)
+           เอาเพดานออก ให้หน้าเว็บเลื่อนทีเดียวจบ และหัวตารางยังลอยตามได้เพราะ
+           overflow เป็น visible ตัว sticky จึงยึดกับหน้าจอแทนกรอบ */
+        #searchTableWrap { overflow: visible; }
 
         table.dataTable thead th {
             position: sticky;
