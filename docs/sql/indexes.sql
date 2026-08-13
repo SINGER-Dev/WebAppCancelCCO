@@ -142,6 +142,25 @@ END
 GO
 
 /* -----------------------------------------------------------------------------
+   11) LOG_TRANSACTTION_SGFINANCE — ผลการแจ้งยกเลิกไปยัง e-contract
+   หน้าค้นหาอ่านตารางนี้ทุกครั้ง เพื่อดูว่าใบคำขอที่ยกเลิกแล้วใบไหนแจ้งไปไม่ถึง
+   (ใช้แสดงจรวด "แจ้งยกเลิกไปยัง e-contract ซ้ำ")
+
+   ตารางมี ~511,000 แถว และมี index เดียวคือ clustered PK (No, OrderID)
+   query กรองด้วย OrderID + Type ซึ่งไม่ได้ขึ้นต้นด้วย No จึง seek ไม่ได้
+   วัดบน DEV : Clustered Index Scan กวาดทั้งตาราง ~90 ms ต่อครั้ง
+   ----------------------------------------------------------------------------- */
+IF NOT EXISTS (SELECT 1 FROM sys.indexes
+               WHERE name = 'IX_LOG_TRANSACTTION_SGFINANCE_OrderID_Type'
+                 AND object_id = OBJECT_ID('[K2CCO].[dbo].[LOG_TRANSACTTION_SGFINANCE]'))
+BEGIN
+    CREATE NONCLUSTERED INDEX IX_LOG_TRANSACTTION_SGFINANCE_OrderID_Type
+        ON [K2CCO].[dbo].[LOG_TRANSACTTION_SGFINANCE] (OrderID, [Type])
+        INCLUDE (StatusCode);
+END
+GO
+
+/* -----------------------------------------------------------------------------
    วิธีตรวจผลก่อน/หลัง
    -----------------------------------------------------------------------------
    SET STATISTICS IO, TIME ON;

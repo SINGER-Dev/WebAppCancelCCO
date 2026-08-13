@@ -1,4 +1,5 @@
 ﻿using App.Clients;
+using App.Infrastructure;
 using Microsoft.Extensions.Caching.Memory;
 using System.Collections.Concurrent;
 using App.Filters;
@@ -362,10 +363,15 @@ namespace App.Controllers
             if (page < 1) page = 1;
             if (!AllowedPageSizes.Contains(pageSize)) pageSize = DefaultPageSize;
 
+            // จับเวลาที่ผู้ใช้รอจริง รวมทั้งกรณีที่ตอบจากแคช เพื่อให้หน้าสถิติสะท้อนของจริง
+            var swRequest = System.Diagnostics.Stopwatch.StartNew();
+            var shape = DescribeSearchShape(_ApplicationModel);
+
             var cacheKey = BuildSearchCacheKey(_ApplicationModel, page, pageSize, sort, dir);
 
             if (cacheKey != null && !noCache && _cache.TryGetValue(cacheKey, out CachedSearch hit))
             {
+                SearchMetrics.Record(shape, -1, -1, swRequest.ElapsedMilliseconds, fromCache: true);
                 return Json(WithAge(hit));
             }
 
@@ -382,6 +388,7 @@ namespace App.Controllers
             {
                 if (cacheKey != null && !noCache && _cache.TryGetValue(cacheKey, out CachedSearch hit2))
                 {
+                    SearchMetrics.Record(shape, -1, -1, swRequest.ElapsedMilliseconds, fromCache: true);
                     return Json(WithAge(hit2));
                 }
 
@@ -389,6 +396,7 @@ namespace App.Controllers
                 try
                 {
                     rows = await RunSearch(_ApplicationModel, (page - 1) * pageSize, pageSize, sort, dir);
+                    SearchMetrics.Record(shape, _lastPageMs, _lastEnrichMs, swRequest.ElapsedMilliseconds, fromCache: false);
                 }
                 catch (Exception ex)
                 {
@@ -614,6 +622,22 @@ namespace App.Controllers
             });
         }
 
+        /// <summary>
+        /// หน้าสถิติการใช้งานหน้าค้นหา
+        ///
+        /// มีไว้ให้ตอบได้ว่า "ตอนนี้ช้าตรงไหน" ด้วยตัวเลขจริง แทนการเดา
+        /// ค่าทั้งหมดอยู่ในหน่วยความจำของแอป จะหายเมื่อรีสตาร์ท
+        /// </summary>
+        [RequireLogin]
+        [HttpGet]
+        public IActionResult Stats()
+        {
+            ViewBag.Stats = SearchMetrics.Snapshot();
+            ViewBag.StartedAt = SearchMetrics.StartedAt;
+            ViewBag.CacheSeconds = _cacheSeconds;
+            return View();
+        }
+
         /// <summary>ครอบค่าให้ปลอดภัยสำหรับไฟล์ CSV (กันคอมมา ตัวขึ้นบรรทัดใหม่ และ formula injection)</summary>
         private static string Csv(string value)
         {
@@ -681,9 +705,14 @@ namespace App.Controllers
                 pageSize = take
             }, commandTimeout: 120))).ToList();
 
+            _lastPageMs = sw.ElapsedMilliseconds;
             Log.Information("ค้นหา: เลือกหน้า {Ms} ms ({Rows} แถว)", sw.ElapsedMilliseconds, pageRows.Count);
 
-            if (pageRows.Count == 0) return new List<ApplicationResponeModel>();
+            if (pageRows.Count == 0)
+            {
+                _lastEnrichMs = 0;
+                return new List<ApplicationResponeModel>();
+            }
 
             // ---- รอบที่ 2: ดึงข้อมูลประกอบ "เฉพาะคีย์ของหน้านี้" ----
             // เดิมผูกด้วย EXISTS กับตารางชั่วคราว ซึ่ง SQL Server ส่งเงื่อนไขข้ามไปให้เซิร์ฟเวอร์ปลายทาง
@@ -714,6 +743,7 @@ namespace App.Controllers
             var regis = regisTask.Result;
             var cancelNotify = cancelNotifyTask.Result;
 
+            _lastEnrichMs = sw.ElapsedMilliseconds;
             Log.Information("ค้นหา: ข้อมูลประกอบ {Ms} ms (สัญญา {C} / newsale {N} / payment {P} / regis {R}) — รวม {Total} ms",
                 sw.ElapsedMilliseconds, contracts.Count, newSales.Count, payments.Count, regis.Count, swTotal.ElapsedMilliseconds);
 
@@ -899,6 +929,23 @@ namespace App.Controllers
 
         // แปลงค่าว่าง/ช่องว่างให้เป็น null เพื่อให้เงื่อนไข (@p IS NULL OR ...) ใน SQL ทำงานถูกต้อง
         private static string Nz(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+        // เวลาของรอบล่าสุด ใช้ส่งต่อให้หน้าสถิติ — ปลอดภัยเพราะ controller หนึ่งตัวรับผิดชอบ request เดียว
+        private long _lastPageMs = -1;
+        private long _lastEnrichMs = -1;
+
+        /// <summary>จัดกลุ่มการค้นตามรูปแบบ เพื่อให้หน้าสถิติเทียบของที่เทียบกันได้</summary>
+        private static string DescribeSearchShape(ApplicationRq m)
+        {
+            if (Nz(m.ApplicationCode) != null || Nz(m.AccountNo) != null
+                || Nz(m.ProductSerialNo) != null || Nz(m.CustomerID) != null)
+            {
+                return "ระบุเลขเจาะจง";
+            }
+            if (Nz(m.CustomerName) != null) return "ค้นด้วยชื่อลูกค้า";
+            if (Nz(m.startdate) != null || Nz(m.enddate) != null) return "ระบุช่วงวันที่";
+            return "วันนี้";
+        }
         // Dummy method to simulate search operation
         [InvalidateSearchCache]
         [RequireLogin]

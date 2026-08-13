@@ -1,0 +1,74 @@
+@using App.Infrastructure
+@{
+    ViewData["Title"] = " สถิติการใช้งานหน้าค้นหา ";
+    var stats = ViewBag.Stats as IReadOnlyList<ShapeStat> ?? new List<ShapeStat>();
+    var startedAt = (DateTime)ViewBag.StartedAt;
+    var cacheSeconds = (int)ViewBag.CacheSeconds;
+    var totalCalls = stats.Sum(s => s.Count);
+}
+
+<div class="filter-card mb-3">
+    <div class="filter-card-head">
+        <span class="filter-card-title">สถิติการใช้งานหน้าค้นหา</span>
+        <span class="filter-card-hint">
+            เก็บค่าตั้งแต่ @startedAt.ToString("d MMM yy HH:mm") · ค้นหาไปแล้ว @totalCalls.ToString("N0") ครั้ง ·
+            เก็บผลค้นหาไว้ @cacheSeconds วินาที · ค่าทั้งหมดอยู่ในหน่วยความจำ จะเริ่มนับใหม่เมื่อรีสตาร์ทระบบ
+        </span>
+    </div>
+
+    <div class="filter-actions">
+        <a href="/" class="btn btn-outline-secondary">กลับหน้าค้นหา</a>
+        <button type="button" class="btn btn-primary" onclick="location.reload()">
+            <i class="fa-solid fa-rotate"></i> อ่านค่าล่าสุด
+        </button>
+    </div>
+</div>
+
+@if (stats.Count == 0)
+{
+    <div class="alert alert-info">
+        ยังไม่มีการค้นหาหลังจากระบบเริ่มทำงานครั้งล่าสุด ลองค้นหาสักครั้งแล้วกลับมาดูใหม่
+    </div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="display dataTable table-secondary" style="width:100%">
+            <thead>
+                <tr>
+                    <th>รูปแบบการค้นหา</th>
+                    <th class="text-end">จำนวนครั้ง</th>
+                    <th class="text-end">ใช้ผลที่เก็บไว้</th>
+                    <th class="text-end">เวลาที่ผู้ใช้รอ (กลาง)</th>
+                    <th class="text-end">เวลาที่ผู้ใช้รอ (ช้าสุด 5%)</th>
+                    <th class="text-end">คัดใบคำขอ</th>
+                    <th class="text-end">ดึงข้อมูลประกอบ</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in stats)
+                {
+                    <tr>
+                        <td>@s.Shape</td>
+                        <td class="text-end">@s.Count.ToString("N0")</td>
+                        <td class="text-end">@s.CacheHitPercent%</td>
+                        <td class="text-end">@s.TotalP50 ms</td>
+                        <td class="text-end">
+                            <span class="badge @(s.TotalP95 >= 1000 ? "bg-warning" : "bg-success")"
+                                  @(s.TotalP95 >= 1000 ? "style=color:#000" : "")>@s.TotalP95 ms</span>
+                        </td>
+                        <td class="text-end">@(s.PageP50 < 0 ? "-" : s.PageP50 + " ms")</td>
+                        <td class="text-end">@(s.EnrichP50 < 0 ? "-" : s.EnrichP50 + " ms")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="mt-3 text-muted" style="font-size:.9rem; line-height:1.8">
+        <div><strong>เวลาที่ผู้ใช้รอ (กลาง)</strong> — ครึ่งหนึ่งของการค้นหาเร็วกว่าค่านี้</div>
+        <div><strong>เวลาที่ผู้ใช้รอ (ช้าสุด 5%)</strong> — ค่านี้คือของจริงที่ผู้ใช้บ่น ไม่ใช่ค่าเฉลี่ย</div>
+        <div><strong>ใช้ผลที่เก็บไว้</strong> — สัดส่วนที่ตอบได้ทันทีโดยไม่ต้องถามฐานข้อมูล</div>
+        <div><strong>คัดใบคำขอ / ดึงข้อมูลประกอบ</strong> — นับเฉพาะครั้งที่ไปถามฐานข้อมูลจริง</div>
+    </div>
+}
