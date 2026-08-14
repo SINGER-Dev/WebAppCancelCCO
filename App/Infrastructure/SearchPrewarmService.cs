@@ -89,7 +89,6 @@ namespace App.Infrastructure
                         // int ให้ตรงกับที่หน้าจอส่ง — ถ้าส่งคนละชนิด SQL Server จะเก็บ plan
                         // แยกกันคนละอัน การอุ่นก็ไม่ช่วยหน้าจอเลย
                         idLowerBound = 0,           // 0 = ไม่ตัดขอบล่างด้วย ApplicationID
-                        quickSearch = (string)null, // ไม่ได้ค้นอะไร อุ่นทั้งวัน
                         offset = 0,
                         pageSize = 20
                     },

@@ -39,23 +39,10 @@ WHERE a.ApplicationDate >= '2024-05-01'
   AND (@ProductSerialNo IS NULL OR a.ProductSerialNo    = @ProductSerialNo)
   AND (@CustomerID      IS NULL OR a.CustomerID         = @CustomerID)
   AND (@CustomerName    IS NULL OR cus.FirstName + ' ' + cus.LastName LIKE '%' + @CustomerName + '%')
-  -- ช่องค้นหาเร็วเหนือตาราง — ไล่หาในคอลัมน์ที่แสดงบนหน้าจอทั้งหมด
-  -- ครอบคลุมของที่ช่องกรองด้านบนไม่มีให้ เช่น ชื่อสาขา ชื่อพนักงานขาย ชื่อสินค้า
-  -- ใช้ ISNULL กันไว้ เพราะถ้าคอลัมน์ไหนเป็น NULL การต่อสตริงจะกลายเป็น NULL ทั้งก้อนแล้วหาไม่เจอ
-  AND (@quickSearch IS NULL OR
-       ISNULL(a.ApplicationCode,'')  LIKE '%' + @quickSearch + '%' OR
-       ISNULL(appex.RefCode,'')      LIKE '%' + @quickSearch + '%' OR
-       ISNULL(a.AccountNo,'')        LIKE '%' + @quickSearch + '%' OR
-       ISNULL(a.ProductSerialNo,'')  LIKE '%' + @quickSearch + '%' OR
-       ISNULL(a.CustomerID,'')       LIKE '%' + @quickSearch + '%' OR
-       ISNULL(cus.FirstName,'') + ' ' + ISNULL(cus.LastName,'') LIKE '%' + @quickSearch + '%' OR
-       ISNULL(cus.MobileNo1,'')      LIKE '%' + @quickSearch + '%' OR
-       ISNULL(a.SaleDepCode,'')      LIKE '%' + @quickSearch + '%' OR
-       ISNULL(a.SaleDepName,'')      LIKE '%' + @quickSearch + '%' OR
-       ISNULL(a.SaleName,'')         LIKE '%' + @quickSearch + '%' OR
-       ISNULL(a.SaleTelephoneNo,'')  LIKE '%' + @quickSearch + '%' OR
-       ISNULL(a.ProductModelName,'') LIKE '%' + @quickSearch + '%' OR
-       ISNULL(a.ApplicationStatusID,'') LIKE '%' + @quickSearch + '%')
+  -- ช่องค้นในผลลัพธ์ไม่ได้กรองที่นี่โดยตั้งใจ — คอลัมน์ที่ผู้ใช้เห็นบนตารางครึ่งหนึ่ง
+  -- ไม่ได้อยู่ในตารางที่คำสั่งนี้อ่าน (สถานะสัญญา/รับสินค้า/ลงทะเบียน/NewSale/Payment
+  -- มาจากอีก 4 ตาราง และ contracts ยังอยู่คนละเซิร์ฟเวอร์) ถ้ากรองที่นี่ แถวที่ตรงเฉพาะ
+  -- ข้อความสถานะจะถูกตัดทิ้งตั้งแต่ยังไม่ได้ประกอบ จึงย้ายไปกรองหลังประกอบแถวเสร็จแทน
   AND (@StatusRegis IS NULL
        OR (@StatusRegis = '1' AND EXISTS (
                SELECT 1 FROM {DATABASEK2}.[ApplicationRegisIMIE] r WITH (NOLOCK)

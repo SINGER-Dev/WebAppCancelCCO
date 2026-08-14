@@ -29,6 +29,15 @@
         /// <summary>คอลัมน์ที่กำลังเรียง และทิศทาง — ให้หน้าจอวาดลูกศรได้ถูก</summary>
         public string Sort { get; set; } = "date";
         public string Dir { get; set; } = "desc";
+
+        /// <summary>
+        /// การค้นในผลลัพธ์ไล่ดูไม่ครบทั้งชุด เพราะชุดผลลัพธ์ใหญ่เกินเพดาน
+        /// ต้องบอกบนหน้าจอ ไม่งั้นผู้ใช้จะเข้าใจว่า "ไม่มี" ทั้งที่จริงคือ "ยังไม่ได้ดูถึง"
+        /// </summary>
+        public bool QuickTruncated { get; set; }
+
+        /// <summary>จำนวนแถวที่การค้นในผลลัพธ์ไล่ดูจริง (มีความหมายเมื่อ QuickTruncated = true)</summary>
+        public int QuickScanned { get; set; }
     }
 
     public class SearchRowDto

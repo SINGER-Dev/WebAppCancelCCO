@@ -94,6 +94,7 @@ namespace App.Controllers
                 {
                     Page = m.Page, PageSize = m.PageSize, Total = m.Total, TotalPages = m.TotalPages,
                     PageSizes = m.PageSizes, GeneratedAt = m.GeneratedAt, Sort = m.Sort, Dir = m.Dir,
+                    QuickTruncated = m.QuickTruncated, QuickScanned = m.QuickScanned,
                     AgeSeconds = (int)Math.Round((DateTime.UtcNow - cached.ReadAtUtc).TotalSeconds)
                 }
             };
@@ -428,7 +429,9 @@ namespace App.Controllers
                         GeneratedAt = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
                         AgeSeconds = 0,
                         Sort = SortColumns.ContainsKey(sort ?? "") ? sort.ToLowerInvariant() : "date",
-                        Dir = string.Equals(dir, "asc", StringComparison.OrdinalIgnoreCase) ? "asc" : "desc" 
+                        Dir = string.Equals(dir, "asc", StringComparison.OrdinalIgnoreCase) ? "asc" : "desc",
+                        QuickTruncated = _lastQuickTruncated,
+                        QuickScanned = _lastQuickScanned
                     }
                 };
 
@@ -691,10 +694,20 @@ namespace App.Controllers
                 ? ApplicationIdBounds.NoBound
                 : await _idBounds.GetLowerBoundAsync(startDate);
 
+            // ค้นในผลลัพธ์ — ครึ่งหนึ่งของคอลัมน์ที่ผู้ใช้เห็น (สถานะสัญญา รับสินค้า ลงทะเบียน
+            // NewSale Payment) ไม่ได้อยู่ในคำสั่งหลัก แต่มาจากรอบที่ 2 จึงกรองที่ SQL ไม่ได้
+            // ต้องดึงผลลัพธ์ทั้งชุดมาประกอบให้ครบก่อน แล้วค่อยกรองด้วยข้อความที่แสดงบนตารางจริง
+            // แบบเดียวกับช่อง Search ของตารางเดิม
+            string quick = Nz(model.quickSearch);
+            int fetchOffset = quick == null ? offset : 0;
+            int fetchTake = quick == null
+                ? take
+                : Math.Min(ExportMaxRows, Math.Max(QuickScanMaxRows, offset + take));
+
             using var connection = new SqlConnection(strConnString);
             await connection.OpenAsync();
 
-            // ---- รอบที่ 1: คัดเฉพาะใบคำขอของหน้านี้ (≤ 100 แถว) ----
+            // ---- รอบที่ 1: คัดใบคำขอที่ต้องประกอบ ----
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var swTotal = System.Diagnostics.Stopwatch.StartNew();
 
@@ -709,11 +722,10 @@ namespace App.Controllers
                 ProductSerialNo = productSerialNo,
                 CustomerID = customerId,
                 CustomerName = Nz(model.CustomerName),
-                quickSearch = Nz(model.quickSearch),
                 StatusRegis = Nz(model.StatusRegis),
                 idLowerBound,
-                offset,
-                pageSize = take
+                offset = fetchOffset,
+                pageSize = fetchTake
             }, commandTimeout: 120))).ToList();
 
             _lastPageMs = sw.ElapsedMilliseconds;
@@ -722,6 +734,8 @@ namespace App.Controllers
             if (pageRows.Count == 0)
             {
                 _lastEnrichMs = 0;
+                _lastQuickScanned = 0;
+                _lastQuickTruncated = false;
                 return new List<ApplicationResponeModel>();
             }
 
@@ -764,13 +778,61 @@ namespace App.Controllers
             var regisBySerial = regis.GroupBy(r => r.IMEI).ToDictionary(g => g.Key, g => g.First());
             var notifyByCode = cancelNotify.GroupBy(n => n.OrderID).ToDictionary(g => g.Key, g => g.First().StatusCode ?? "");
 
-            return pageRows.Select(r =>
+            var composed = pageRows.Select(r =>
             {
                 var item = Compose(r, contractByCode, newSaleByAcc, paymentByAcc, regisBySerial);
                 notifyByCode.TryGetValue(r.ApplicationCode ?? "", out var notifyStatus);
                 item.CancelNotifyStatus = notifyStatus ?? "";
                 return item;
             }).ToList();
+
+            if (quick == null)
+            {
+                _lastQuickScanned = 0;
+                _lastQuickTruncated = false;
+                return composed;
+            }
+
+            // ---- ค้นในผลลัพธ์: กรองหลังประกอบแถวเสร็จ แล้วแบ่งหน้าเองที่นี่ ----
+            // ต้องบอกด้วยว่าไล่ดูไปกี่แถว ถ้าชุดผลลัพธ์ใหญ่เกินเพดานแล้วไปตัดเงียบ ๆ
+            // ผู้ใช้จะเข้าใจว่า "ไม่มี" ทั้งที่จริงคือ "ยังไม่ได้ดูถึง"
+            int setTotal = pageRows[0].TotalRows;
+            _lastQuickScanned = pageRows.Count;
+            _lastQuickTruncated = setTotal > pageRows.Count;
+
+            var matched = composed.Where(r => MatchesQuickSearch(r, quick)).ToList();
+            Log.Information("ค้นในผลลัพธ์ \"{Term}\": ตรง {Matched} จาก {Scanned} แถวที่ไล่ดู (ทั้งชุด {Total})",
+                quick, matched.Count, pageRows.Count, setTotal);
+
+            var slice = matched.Skip(offset).Take(take).ToList();
+            foreach (var row in slice) { row.TotalRows = matched.Count; }
+            return slice;
+        }
+
+        /// <summary>
+        /// แถวนี้ตรงกับคำค้นในผลลัพธ์หรือไม่ — เทียบกับ "ข้อความที่แสดงบนตาราง" ไม่ใช่ค่าดิบในฐานข้อมูล
+        ///
+        /// ที่ต้องเป็นข้อความที่แสดง เพราะผู้ใช้เห็นอะไรก็ค้นด้วยคำนั้น เช่นพิมพ์ "พบรายการซ้ำ"
+        /// หรือ "รับสินค้าแล้ว" ซึ่งเป็นคำที่ประกอบขึ้นตอนวาดแถว ไม่มีคำพวกนี้อยู่ในฐานข้อมูลเลย
+        /// (ของเดิมตารางกรองฝั่งเบราว์เซอร์จึงค้นคำพวกนี้ได้ พอย้ายมาแบ่งหน้าที่ server แล้วหายไป)
+        ///
+        /// เทียบเฉพาะ "ค่า" ไม่รวมป้ายกำกับอย่าง "เลขที่สัญญา :" — ป้ายมีเหมือนกันทุกแถว
+        /// ค้นแล้วจะได้ทั้งหน้า ไม่ได้ช่วยอะไร
+        /// </summary>
+        private static bool MatchesQuickSearch(ApplicationResponeModel r, string term)
+        {
+            return Has(r.ApplicationCode) || Has(r.RefCode) || Has(r.ApplicationDate)
+                || Has(r.AccountNo) || Has(r.CustomerID) || Has(r.Cusname) || Has(r.cusMobile)
+                || Has(r.SaleDepCode) || Has(r.SaleDepName) || Has(r.SaleName) || Has(r.SaleTelephoneNo)
+                || Has(r.ProductModelName) || Has(r.ProductSerialNo)
+                || Has(r.ApplicationStatusID)
+                // คอลัมน์ "สถานะสัญญา" และ "ตรวจสอบ" — ข้อความที่ประกอบขึ้นใน Compose
+                || Has(r.numdoc) || Has(r.signedStatus) || Has(r.statusReceived)
+                || Has(r.numregis) || Has(r.newnum) || Has(r.paynum);
+
+            bool Has(string value) =>
+                !string.IsNullOrEmpty(value) &&
+                value.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         /// <summary>จำนวนคีย์สูงสุดต่อคำสั่ง — ต่ำกว่าเพดานพารามิเตอร์ 2,100 ของ SQL Server พอสมควร</summary>
@@ -938,12 +1000,25 @@ namespace App.Controllers
         // เพดานจำนวนแถวของการดาวน์โหลดไฟล์ (ดึงทั้งผลลัพธ์ ไม่ใช่เฉพาะหน้าที่แสดง)
         private const int ExportMaxRows = 50000;
 
+        /// <summary>
+        /// เพดานจำนวนแถวที่ยอมประกอบเพื่อค้นในผลลัพธ์
+        ///
+        /// การค้นในผลลัพธ์ต้องประกอบแถวให้ครบก่อนถึงจะเทียบข้อความสถานะได้ ซึ่งต้องยิงข้อมูล
+        /// ประกอบทีละก้อนละ 1,000 คีย์ ยิ่งชุดใหญ่ยิ่งช้า ผลค้นหาปกติของหนึ่งวันอยู่หลักร้อย
+        /// เพดานนี้จึงเผื่อไว้เยอะแล้ว และถ้าเกินก็ไม่ได้เงียบ — ส่งกลับไปบอกบนหน้าจอ
+        /// </summary>
+        private const int QuickScanMaxRows = 5000;
+
         // แปลงค่าว่าง/ช่องว่างให้เป็น null เพื่อให้เงื่อนไข (@p IS NULL OR ...) ใน SQL ทำงานถูกต้อง
         private static string Nz(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
         // เวลาของรอบล่าสุด ใช้ส่งต่อให้หน้าสถิติ — ปลอดภัยเพราะ controller หนึ่งตัวรับผิดชอบ request เดียว
         private long _lastPageMs = -1;
         private long _lastEnrichMs = -1;
+
+        /// <summary>จำนวนแถวที่ไล่ดูจริงในการค้นในผลลัพธ์รอบล่าสุด และไล่ดูไม่ครบทั้งชุดหรือไม่</summary>
+        private int _lastQuickScanned;
+        private bool _lastQuickTruncated;
 
         /// <summary>จัดกลุ่มการค้นตามรูปแบบ เพื่อให้หน้าสถิติเทียบของที่เทียบกันได้</summary>
         private static string DescribeSearchShape(ApplicationRq m)

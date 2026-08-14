@@ -628,6 +628,8 @@
     var QUICK_DELAY = 500;      // หน่วงให้พอพิมพ์คำไทยจบคำ ไม่ยิงกลางคำ
     var quickTimer = null;
     var quickApplied = '';      // คำที่ยิงไปแล้วจริง ๆ — ใช้เทียบว่าควรยิงซ้ำไหม
+    var quickTruncated = false; // server ไล่ดูไม่ครบทั้งชุดเพราะผลลัพธ์ใหญ่เกินเพดาน
+    var quickScanned = 0;       // ไล่ดูไปกี่แถว
 
     function quickRaw() { return String($('#quickSearch').val() || '').trim(); }
 
@@ -645,6 +647,12 @@
         var $hint = $('#quickSearchHint').removeClass('is-empty');
         if (raw !== '' && raw.length < QUICK_MIN) {
             $hint.text('พิมพ์อีก ' + (QUICK_MIN - raw.length) + ' ตัวอักษรจึงจะเริ่มค้น');
+        } else if (quickTruncated) {
+            // ชุดผลลัพธ์ใหญ่เกินกว่าจะไล่ดูครบ ต้องบอกตรง ๆ ไม่งั้นผู้ใช้จะเข้าใจว่า "ไม่มี"
+            // ทั้งที่จริงคือ "ยังไม่ได้ดูถึง" — วิธีแก้คือหรี่ช่วงวันที่หรือตัวกรองด้านบนให้แคบลง
+            $hint.addClass('is-empty').text(
+                'ผลลัพธ์ชุดนี้ใหญ่เกินไป ค้นได้แค่ ' + quickScanned.toLocaleString() +
+                ' รายการแรก — ลองหรี่ช่วงวันที่หรือตัวกรองด้านบนให้แคบลง');
         } else if (quickApplied !== '') {
             $hint.text('กรองอยู่ด้วย “' + quickApplied + '” — กด Esc เพื่อล้าง');
         } else {
@@ -686,6 +694,7 @@
         clearTimeout(quickTimer);
         var had = quickApplied !== '' || quickRaw() !== '';
         $('#quickSearch').val('');
+        quickTruncated = false;
         if (!rerun) { quickApplied = ''; renderQuickState(); return; }
         if (had && quickApplied !== '') { searchForm(1, currentPageSize()); }
         else { quickApplied = ''; renderQuickState(); }
@@ -845,6 +854,8 @@
 
         $('#searchAlert').empty();
 
+        quickTruncated = quickApplied !== '' && meta.quickTruncated === true;
+        quickScanned = meta.quickScanned || 0;
         renderQuickState();
 
         if (!rows.length) {
