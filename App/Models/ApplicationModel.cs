@@ -83,6 +83,9 @@ namespace App.Models
         public string CustomerName { get; set; }
         public string StatusRegis { get; set; }
         public string loanTypeCate { get; set; }
+
+        /// <summary>ช่องค้นหาเร็วเหนือตาราง — ไล่หาในหลายคอลัมน์พร้อมกัน (สาขา พนักงานขาย ชื่อสินค้า ฯลฯ)</summary>
+        public string quickSearch { get; set; }
     }
 
     public class SearchGetApplicationHistory

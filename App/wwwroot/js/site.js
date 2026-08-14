@@ -614,6 +614,19 @@
         searchForm(1, parseInt($(this).val(), 10));
     });
 
+    // ค้นในผลลัพธ์ — หน่วงไว้ 400 มิลลิวินาที จะได้ไม่ยิงไปที่ server ทุกตัวอักษรที่พิมพ์
+    // และกลับไปหน้า 1 เสมอ เพราะจำนวนหน้าเปลี่ยนตามคำค้น
+    var quickTimer = null;
+    $(document).on('input', '#quickSearch', function () {
+        clearTimeout(quickTimer);
+        quickTimer = setTimeout(function () { searchForm(1, currentPageSize()); }, 400);
+    });
+
+    // กด Enter ให้ค้นทันที ไม่ต้องรอหน่วง
+    $(document).on('keydown', '#quickSearch', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); clearTimeout(quickTimer); searchForm(1, currentPageSize()); }
+    });
+
     $(document).on('click', '#btnExportSearch', function (e) {
         e.preventDefault();
         exportSearch();
@@ -679,6 +692,9 @@
         // หลังกดปุ่มซ่อมสำเร็จ ต้องอ่านค่าสด ไม่งั้นจะเห็นสถานะเดิมที่ยังค้างอยู่ใน cache
         if (noCache) { formData += '&noCache=true'; }
         formData += '&sort=' + encodeURIComponent(sortState.sort) + '&dir=' + encodeURIComponent(sortState.dir);
+        // ช่องค้นในผลลัพธ์อยู่นอกฟอร์ม (อยู่บนแถบเครื่องมือ) จึงต้องแนบเอง
+        var quick = $.trim($('#quickSearch').val() || '');
+        if (quick) { formData += '&quickSearch=' + encodeURIComponent(quick); }
 
         $.ajax({
             url: $('#searchForm').attr('action'),

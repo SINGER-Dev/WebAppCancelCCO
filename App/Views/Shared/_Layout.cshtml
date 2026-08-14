@@ -288,6 +288,19 @@ https://cdn.jsdelivr.net/npm/sweetalert2@11.11.0/dist/sweetalert2.min.css
             transform: translateX(-50%);
         }
 
+        /* ช่องค้นในผลลัพธ์ บนแถบเครื่องมือเหนือตาราง */
+        .quick-search { position: relative; }
+        .quick-search input { padding-left: 2rem; width: 19rem; max-width: 100%; }
+        .quick-search i {
+            position: absolute;
+            left: .7rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #8a94a0;
+            font-size: .8rem;
+            pointer-events: none;
+        }
+
         /* ตาราง: แสดงทุกแถวให้ครบ ไม่มีแถบเลื่อนซ้อนอยู่ข้างใน
            ของเดิมจำกัดความสูงไว้ที่ calc(100vh - 22rem) แล้วให้เลื่อนในกรอบ
            พอจอเตี้ย กรอบจะเหลือแค่ไม่กี่แถว ต้องเลื่อนสองชั้น (ในกรอบ + ทั้งหน้า)

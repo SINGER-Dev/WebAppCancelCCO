@@ -82,6 +82,14 @@ namespace App.Infrastructure
                         CustomerID = (string)null,
                         CustomerName = (string)null,
                         StatusRegis = (string)null,
+                        // SQL ชุดนี้ใช้ร่วมกับหน้าจอค้นหา ทุกพารามิเตอร์ที่หน้าจอส่ง
+                        // ต้องส่งที่นี่ด้วย ไม่งั้น SQL Server จะฟ้อง
+                        // "Must declare the scalar variable" แล้วงานอุ่นข้อมูลจะล้มทุกรอบ
+                        // โดยไม่มีใครรู้ เพราะ catch ด้านล่างกลืนไว้
+                        // int ให้ตรงกับที่หน้าจอส่ง — ถ้าส่งคนละชนิด SQL Server จะเก็บ plan
+                        // แยกกันคนละอัน การอุ่นก็ไม่ช่วยหน้าจอเลย
+                        idLowerBound = 0,           // 0 = ไม่ตัดขอบล่างด้วย ApplicationID
+                        quickSearch = (string)null, // ไม่ได้ค้นอะไร อุ่นทั้งวัน
                         offset = 0,
                         pageSize = 20
                     },

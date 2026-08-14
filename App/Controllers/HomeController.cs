@@ -465,7 +465,7 @@ namespace App.Controllers
             return string.Join("|", "search", InvalidateSearchCacheAttribute.Version,
                 Nz(m.startdate) ?? DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 Nz(m.enddate) ?? DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                Nz(m.status), Nz(m.loanTypeCate), Nz(m.StatusRegis), pageSize, sort, dir);
+                Nz(m.status), Nz(m.loanTypeCate), Nz(m.StatusRegis), Nz(m.quickSearch), pageSize, sort, dir);
         }
 
         /// <summary>
@@ -709,6 +709,7 @@ namespace App.Controllers
                 ProductSerialNo = productSerialNo,
                 CustomerID = customerId,
                 CustomerName = Nz(model.CustomerName),
+                quickSearch = Nz(model.quickSearch),
                 StatusRegis = Nz(model.StatusRegis),
                 idLowerBound,
                 offset,

@@ -108,6 +108,13 @@
     <div id="searchToolbar" class="results-toolbar" hidden>
         <div class="results-count" id="resultsCount"></div>
         <div class="results-tools">
+            @* ค้นในผลลัพธ์ — ไล่หาทุกคอลัมน์ที่แสดงบนตาราง รวมสาขา พนักงานขาย ชื่อสินค้า
+               ซึ่งช่องกรองด้านบนไม่มีให้ · ค้นที่ server จึงครอบคลุมทุกหน้า ไม่ใช่เฉพาะหน้าที่เห็น *@
+            <div class="quick-search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="search" id="quickSearch" class="form-control form-control-sm"
+                       placeholder="ค้นในผลลัพธ์ เช่น ชื่อสาขา พนักงานขาย ชื่อสินค้า" autocomplete="off" />
+            </div>
             <label class="mb-0 text-nowrap" for="pageSizeSelect">แสดงหน้าละ</label>
             <select id="pageSizeSelect" class="form-select form-select-sm" style="width:auto"></select>
             <button type="button" id="btnRefreshNow" class="btn btn-outline-primary btn-sm text-nowrap" title="อ่านข้อมูลสดจากฐานข้อมูลทันที">
