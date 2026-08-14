@@ -103,18 +103,30 @@
         </div>
     </div>
 
+    @* ค้นในผลลัพธ์ — ไล่หาทุกคอลัมน์ที่แสดงบนตาราง รวมสาขา พนักงานขาย ชื่อสินค้า
+       ซึ่งช่องกรองด้านบนไม่มีให้ · ค้นที่ server จึงครอบคลุมทุกหน้า ไม่ใช่เฉพาะหน้าที่เห็น
+
+       อยู่นอก #searchToolbar โดยตั้งใจ — แถบเครื่องมือถูกซ่อนทุกครั้งที่ผลลัพธ์เป็นศูนย์
+       ถ้าช่องนี้อยู่ในนั้น พอพิมพ์แล้วไม่เจอ ช่องจะหายไปพร้อมกับผลลัพธ์ ทั้งที่ค่ายังค้างอยู่
+       และถูกแนบไปกับการค้นครั้งถัดไปทุกครั้ง — ผู้ใช้จะค้นอะไรก็ไม่เจอโดยไม่รู้สาเหตุ *@
+    <div id="quickSearchBar" class="quick-bar" hidden>
+        <div class="quick-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="quickSearch" class="form-control form-control-sm"
+                   placeholder="ค้นในผลลัพธ์ — สาขา พนักงานขาย ชื่อสินค้า เบอร์โทร เลขที่ใบคำขอ"
+                   autocomplete="off" />
+            <button type="button" id="quickSearchClear" class="quick-clear" title="ล้างคำค้น (Esc)" hidden>
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <span id="quickSearchHint" class="quick-hint"></span>
+    </div>
+
     <div id="searchAlert"></div>
 
     <div id="searchToolbar" class="results-toolbar" hidden>
         <div class="results-count" id="resultsCount"></div>
         <div class="results-tools">
-            @* ค้นในผลลัพธ์ — ไล่หาทุกคอลัมน์ที่แสดงบนตาราง รวมสาขา พนักงานขาย ชื่อสินค้า
-               ซึ่งช่องกรองด้านบนไม่มีให้ · ค้นที่ server จึงครอบคลุมทุกหน้า ไม่ใช่เฉพาะหน้าที่เห็น *@
-            <div class="quick-search">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="search" id="quickSearch" class="form-control form-control-sm"
-                       placeholder="ค้นในผลลัพธ์ เช่น ชื่อสาขา พนักงานขาย ชื่อสินค้า" autocomplete="off" />
-            </div>
             <label class="mb-0 text-nowrap" for="pageSizeSelect">แสดงหน้าละ</label>
             <select id="pageSizeSelect" class="form-select form-select-sm" style="width:auto"></select>
             <button type="button" id="btnRefreshNow" class="btn btn-outline-primary btn-sm text-nowrap" title="อ่านข้อมูลสดจากฐานข้อมูลทันที">

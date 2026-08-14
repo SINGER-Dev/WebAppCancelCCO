@@ -288,10 +288,20 @@ https://cdn.jsdelivr.net/npm/sweetalert2@11.11.0/dist/sweetalert2.min.css
             transform: translateX(-50%);
         }
 
-        /* ช่องค้นในผลลัพธ์ บนแถบเครื่องมือเหนือตาราง */
+        /* ช่องค้นในผลลัพธ์ — แถวของตัวเองเหนือผลลัพธ์
+           ต้องอยู่เห็นได้ตลอดแม้ผลลัพธ์เป็นศูนย์ ผู้ใช้จึงลบคำค้นออกเองได้ */
+        .quick-bar {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: .6rem;
+            margin: 1rem 0 .2rem;
+        }
+
         .quick-search { position: relative; }
-        .quick-search input { padding-left: 2rem; width: 19rem; max-width: 100%; }
-        .quick-search i {
+        .quick-search input { padding-left: 2rem; padding-right: 2rem; width: 26rem; max-width: 100%; }
+        .quick-search input:focus { border-color: #86b7fe; }
+        .quick-search > i {
             position: absolute;
             left: .7rem;
             top: 50%;
@@ -299,6 +309,44 @@ https://cdn.jsdelivr.net/npm/sweetalert2@11.11.0/dist/sweetalert2.min.css
             color: #8a94a0;
             font-size: .8rem;
             pointer-events: none;
+        }
+
+        /* ปุ่มล้างของเราเอง — ปุ่ม × ของเบราว์เซอร์หน้าตาไม่เหมือนกันในแต่ละตัว และบางตัวไม่มีเลย */
+        .quick-clear {
+            position: absolute;
+            right: .35rem;
+            top: 50%;
+            transform: translateY(-50%);
+            border: 0;
+            background: transparent;
+            color: #8a94a0;
+            line-height: 1;
+            padding: .25rem .35rem;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .quick-clear:hover { color: #334155; background: #eef1f5; }
+
+        .quick-hint { font-size: .8rem; color: #6b7280; }
+        .quick-hint.is-empty { color: #b45309; }
+
+        /* แถวแจ้งว่าคำค้นในผลลัพธ์ไม่ตรงกับอะไรเลย — อยู่ในตาราง ตารางจึงไม่ยุบหาย */
+        .no-match-row td {
+            text-align: center;
+            padding: 1.6rem .75rem;
+            color: #6b7280;
+            background: #fff;
+        }
+
+        /* ป้ายบอกว่าตอนนี้ผลลัพธ์ถูกกรองด้วยคำไหนอยู่ */
+        .quick-chip {
+            display: inline-block;
+            margin-left: .35rem;
+            padding: .05rem .45rem;
+            border-radius: .8rem;
+            background: #e8f0fe;
+            color: #1a4d8f;
+            font-size: .78rem;
         }
 
         /* ตาราง: แสดงทุกแถวให้ครบ ไม่มีแถบเลื่อนซ้อนอยู่ข้างใน

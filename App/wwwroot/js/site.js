@@ -24,6 +24,10 @@
         // (เดิมกด Enter จะ submit แบบปกติ แล้วเบราว์เซอร์เด้งไปหน้าที่มีแต่ตารางดิบ ๆ)
         $('#searchForm').on('submit', function (e) {
             e.preventDefault();
+            // เริ่มค้นชุดใหม่จากฟอร์มด้านบน = ล้างคำค้นในผลลัพธ์ของชุดเก่าทิ้ง
+            // ("ค้นในผลลัพธ์" ผูกกับผลลัพธ์ชุดที่เห็นอยู่ พอเปลี่ยนชุดแล้วมันไม่มีความหมายอีก
+            //  ถ้าปล่อยค้างไว้ ผู้ใช้จะกดค้นอะไรก็ไม่เจอ เพราะคำเก่าถูกแนบไปด้วยทุกครั้ง)
+            clearQuickSearch(false);
             searchForm(1, currentPageSize());
         });
 
@@ -32,6 +36,7 @@
             $('#status, #StatusRegis').val('');
             $('#loanTypeCate').val('LOCKPHONE');
             $('.date').datepicker('setDate', new Date());
+            clearQuickSearch(false);
             $('#ApplicationCode').trigger('focus');
         });
 
@@ -614,18 +619,77 @@
         searchForm(1, parseInt($(this).val(), 10));
     });
 
-    // ค้นในผลลัพธ์ — หน่วงไว้ 400 มิลลิวินาที จะได้ไม่ยิงไปที่ server ทุกตัวอักษรที่พิมพ์
-    // และกลับไปหน้า 1 เสมอ เพราะจำนวนหน้าเปลี่ยนตามคำค้น
+    // ---------- ค้นในผลลัพธ์ ----------
+    //
+    // ตัวอักษรเดียวไม่ยิง — ในผลลัพธ์วันหนึ่งมีหลักร้อยถึงหลักพันแถว "ก" ตัวเดียวแทบจะตรงทุกแถว
+    // ได้ผลกลับมาเท่าเดิมแต่เสียเวลารอ query ที่กวาดทั้งชุด · เริ่มค้นเมื่อครบ 2 ตัวอักษรขึ้นไป
+    // ต่ำกว่านั้นถือว่า "ไม่กรอง" ผลลัพธ์จึงกลับมาเต็มชุดเสมอเมื่อผู้ใช้ลบคำทิ้ง
+    var QUICK_MIN = 2;
+    var QUICK_DELAY = 500;      // หน่วงให้พอพิมพ์คำไทยจบคำ ไม่ยิงกลางคำ
     var quickTimer = null;
-    $(document).on('input', '#quickSearch', function () {
+    var quickApplied = '';      // คำที่ยิงไปแล้วจริง ๆ — ใช้เทียบว่าควรยิงซ้ำไหม
+
+    function quickRaw() { return String($('#quickSearch').val() || '').trim(); }
+
+    /// คำที่จะส่งไป server จริง — ต่ำกว่าขั้นต่ำถือว่าไม่ได้กรอง
+    function quickEffective() {
+        var v = quickRaw();
+        return v.length >= QUICK_MIN ? v : '';
+    }
+
+    /// อัปเดตปุ่มล้างและข้อความใต้ช่อง ให้ผู้ใช้รู้ว่าตอนนี้ระบบกำลังรออะไรอยู่
+    function renderQuickState() {
+        var raw = quickRaw();
+        $('#quickSearchClear').prop('hidden', raw === '');
+
+        var $hint = $('#quickSearchHint').removeClass('is-empty');
+        if (raw !== '' && raw.length < QUICK_MIN) {
+            $hint.text('พิมพ์อีก ' + (QUICK_MIN - raw.length) + ' ตัวอักษรจึงจะเริ่มค้น');
+        } else if (quickApplied !== '') {
+            $hint.text('กรองอยู่ด้วย “' + quickApplied + '” — กด Esc เพื่อล้าง');
+        } else {
+            $hint.text('');
+        }
+    }
+
+    /// ยิงค้นเมื่อคำที่จะใช้จริงเปลี่ยนไปจากรอบก่อนเท่านั้น
+    /// (force = กด Enter — ผู้ใช้ตั้งใจสั่งเอง ให้ยิงซ้ำได้แม้คำเดิม)
+    function runQuickSearch(force) {
         clearTimeout(quickTimer);
-        quickTimer = setTimeout(function () { searchForm(1, currentPageSize()); }, 400);
+        if (!force && quickEffective() === quickApplied) { renderQuickState(); return; }
+        searchForm(1, currentPageSize());
+    }
+
+    $(document).on('input', '#quickSearch', function () {
+        renderQuickState();
+        clearTimeout(quickTimer);
+        quickTimer = setTimeout(function () { runQuickSearch(false); }, QUICK_DELAY);
     });
 
-    // กด Enter ให้ค้นทันที ไม่ต้องรอหน่วง
     $(document).on('keydown', '#quickSearch', function (e) {
-        if (e.key === 'Enter') { e.preventDefault(); clearTimeout(quickTimer); searchForm(1, currentPageSize()); }
+        // กด Enter ให้ค้นทันที ไม่ต้องรอหน่วง
+        if (e.key === 'Enter') { e.preventDefault(); runQuickSearch(true); return; }
+        // กด Esc ล้างคำค้นแล้วกลับไปดูผลลัพธ์เต็มชุด
+        if (e.key === 'Escape') { e.preventDefault(); clearQuickSearch(true); }
     });
+
+    $(document).on('click', '#quickSearchClear, .quick-clear-link', function (e) {
+        e.preventDefault();
+        clearQuickSearch(true);
+        $('#quickSearch').trigger('focus');
+    });
+
+    /// ล้างช่องค้นในผลลัพธ์
+    /// rerun = ยิงค้นใหม่ให้ผลลัพธ์กลับมาเต็มชุด (ใช้ตอนผู้ใช้กดล้างเอง)
+    /// ไม่ rerun = แค่ล้างค่าทิ้ง ใช้ตอนเริ่มค้นชุดใหม่จากฟอร์มด้านบน ซึ่งจะยิงค้นอยู่แล้ว
+    function clearQuickSearch(rerun) {
+        clearTimeout(quickTimer);
+        var had = quickApplied !== '' || quickRaw() !== '';
+        $('#quickSearch').val('');
+        if (!rerun) { quickApplied = ''; renderQuickState(); return; }
+        if (had && quickApplied !== '') { searchForm(1, currentPageSize()); }
+        else { quickApplied = ''; renderQuickState(); }
+    }
 
     $(document).on('click', '#btnExportSearch', function (e) {
         e.preventDefault();
@@ -677,8 +741,15 @@
         $('#searchForm').serializeArray().forEach(function (kv) {
             $('<input>', { type: 'hidden', name: kv.name, value: kv.value }).appendTo($tmp);
         });
+        // ช่องค้นในผลลัพธ์อยู่นอกฟอร์ม ต้องแนบเอง ไม่งั้นไฟล์ที่ได้จะไม่ตรงกับที่เห็นบนจอ
+        var quick = quickEffective();
+        if (quick) { $('<input>', { type: 'hidden', name: 'quickSearch', value: quick }).appendTo($tmp); }
         $tmp.appendTo('body').submit().remove();
     }
+
+    // ลำดับของคำค้น — พิมพ์เร็ว ๆ จะมีหลายคำขอค้างอยู่พร้อมกัน และไม่รับประกันว่าจะกลับมาตามลำดับ
+    // ถ้าไม่กันไว้ คำตอบของคำเก่าที่กลับมาช้าจะทับผลของคำล่าสุดที่วาดไปแล้ว
+    var searchSeq = 0;
 
     function searchForm(page, pageSize, noCache) {
 
@@ -692,9 +763,11 @@
         // หลังกดปุ่มซ่อมสำเร็จ ต้องอ่านค่าสด ไม่งั้นจะเห็นสถานะเดิมที่ยังค้างอยู่ใน cache
         if (noCache) { formData += '&noCache=true'; }
         formData += '&sort=' + encodeURIComponent(sortState.sort) + '&dir=' + encodeURIComponent(sortState.dir);
-        // ช่องค้นในผลลัพธ์อยู่นอกฟอร์ม (อยู่บนแถบเครื่องมือ) จึงต้องแนบเอง
-        var quick = $.trim($('#quickSearch').val() || '');
+        // ช่องค้นในผลลัพธ์อยู่นอกฟอร์ม (อยู่คนละแถวเหนือผลลัพธ์) จึงต้องแนบเอง
+        var quick = quickEffective();
         if (quick) { formData += '&quickSearch=' + encodeURIComponent(quick); }
+
+        var seq = ++searchSeq;
 
         $.ajax({
             url: $('#searchForm').attr('action'),
@@ -702,16 +775,24 @@
             data: formData,
             dataType: 'json',
             success: function (res) {
+                if (seq !== searchSeq) { return; }   // มีคำค้นใหม่แซงไปแล้ว ทิ้งคำตอบนี้
                 $('.loaddong').css('display', 'none');
+                quickApplied = quick;
+                // ช่องค้นในผลลัพธ์โผล่ตั้งแต่ค้นครั้งแรก และอยู่ต่อไปแม้ผลลัพธ์เป็นศูนย์
+                $('#quickSearchBar').prop('hidden', false);
                 renderResults(res);
             },
             error: function (xhr) {
+                if (seq !== searchSeq) { return; }
                 $('.loaddong').css('display', 'none');
                 if (xhr.status === 401) { window.location.href = '/Login'; return; }
+                quickApplied = quick;
+                $('#quickSearchBar').prop('hidden', false);
                 var msg = (xhr.responseJSON && xhr.responseJSON.message)
                     || 'ค้นหาไม่สำเร็จ กรุณาลองใหม่อีกครั้ง หากยังไม่ได้ให้แจ้งทีมผู้ดูแล';
                 showResultsAlert('danger', msg);
                 hideResults();
+                renderQuickState();
             }
         });
     }
@@ -764,7 +845,28 @@
 
         $('#searchAlert').empty();
 
+        renderQuickState();
+
         if (!rows.length) {
+            // คำค้นในผลลัพธ์ไม่เจอ = ตารางต้องอยู่ที่เดิม ห้ามยุบทิ้ง
+            //
+            // ของเดิมยุบทั้งตาราง แถบเครื่องมือ และแถบหน้า ผู้ใช้จึงต้องไปกดค้นจากฟอร์มด้านบนใหม่
+            // เพื่อเรียกตารางกลับมา ซึ่งเป็นการเริ่มเงื่อนไขชุดใหม่ — เงื่อนไขที่ตั้งไว้ก่อนหน้าหายไปด้วย
+            // ที่ถูกคือแค่บอกในตัวตารางว่าคำนี้ไม่ตรงกับอะไรเลย แล้วให้ลบคำค้นทิ้งตรงนั้นได้เลย
+            if (quickApplied !== '') {
+                $('#searchTableBody').html(
+                    '<tr class="no-match-row"><td colspan="8">' +
+                    'ไม่พบรายการที่ตรงกับ “' + esc(quickApplied) + '” ในผลการค้นหาชุดนี้ ' +
+                    '<a href="#" class="quick-clear-link">ล้างคำค้น</a>' +
+                    '</td></tr>');
+                $('#searchTableWrap').prop('hidden', false);
+                renderToolbar(meta);
+                renderPager(meta);
+                renderSortIndicator(meta);
+                return;
+            }
+
+            // ไม่มีคำค้นในผลลัพธ์ = ตัวกรองด้านบนไม่เจอจริง ๆ ไม่มีตารางให้คงไว้
             hideResults();
             showResultsAlert('secondary', 'ไม่พบใบคำขอตามเงื่อนไขนี้ ลองขยายช่วงวันที่ หรือตรวจสอบเลขที่ใบคำขออีกครั้ง');
             return;
@@ -872,11 +974,15 @@
             ? '<span class="data-fresh">ข้อมูลสด ' + esc(meta.generatedAt || '') + '</span>'
             : '<span class="data-stale">ข้อมูล ณ ' + esc(meta.generatedAt || '') + ' (' + age + ' วินาทีที่แล้ว)</span>';
 
+        // บอกด้วยว่าตัวเลขนี้เป็นของ "หลังกรองด้วยคำค้นในผลลัพธ์" ไม่ใช่ยอดทั้งวัน
+        var chip = quickApplied === '' ? ''
+            : '<span class="quick-chip">กรอง: ' + esc(quickApplied) + '</span>';
+
         $('#resultsCount').html(
             'แสดง <b>' + first.toLocaleString() + '</b>–<b>' + last.toLocaleString() + '</b> ' +
             'จาก <b>' + meta.total.toLocaleString() + '</b> รายการ ' +
             '<span class="text-muted">(หน้า ' + meta.page + ' จาก ' + meta.totalPages + ')</span> ' +
-            stamp
+            stamp + chip
         );
 
         var $sel = $('#pageSizeSelect');
