@@ -399,7 +399,7 @@ namespace App.Controllers
                 List<ApplicationResponeModel> rows;
                 try
                 {
-                    rows = await RunSearch(_ApplicationModel, (page - 1) * pageSize, pageSize, sort, dir);
+                    rows = await RunSearch(_ApplicationModel, (page - 1) * pageSize, pageSize, sort, dir, noCache);
                     SearchMetrics.Record(shape, _lastPageMs, _lastEnrichMs, swRequest.ElapsedMilliseconds, fromCache: false);
                 }
                 catch (Exception ex)
@@ -426,8 +426,10 @@ namespace App.Controllers
                         Total = totalRows,
                         TotalPages = totalRows == 0 ? 0 : (int)Math.Ceiling(totalRows / (double)pageSize),
                         PageSizes = AllowedPageSizes,
-                        GeneratedAt = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
-                        AgeSeconds = 0,
+                        // อ่านจากเวลาที่ดึงข้อมูลจริง ไม่ใช่เวลาปัจจุบัน — การค้นในผลลัพธ์
+                        // อาจใช้ชุดที่ดึงไว้ก่อนหน้า ถ้าปั๊มเวลา ณ ตอนนี้จะขึ้นว่า "ข้อมูลสด" ทั้งที่ไม่ใช่
+                        GeneratedAt = _lastReadAtUtc.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture),
+                        AgeSeconds = Math.Max(0, (int)Math.Round((DateTime.UtcNow - _lastReadAtUtc).TotalSeconds)),
                         Sort = SortColumns.ContainsKey(sort ?? "") ? sort.ToLowerInvariant() : "date",
                         Dir = string.Equals(dir, "asc", StringComparison.OrdinalIgnoreCase) ? "asc" : "desc",
                         QuickTruncated = _lastQuickTruncated,
@@ -659,7 +661,7 @@ namespace App.Controllers
         /// รันคำค้นเดียวกันกับที่หน้าจอใช้ โดยระบุช่วงแถวที่ต้องการ (offset/take)
         /// ใช้ร่วมกันระหว่างการแสดงผลทีละหน้าและการดาวน์โหลดทั้งผลลัพธ์
         /// </summary>
-        private async Task<List<ApplicationResponeModel>> RunSearch(ApplicationRq model, int offset, int take, string sort, string dir)
+        private async Task<List<ApplicationResponeModel>> RunSearch(ApplicationRq model, int offset, int take, string sort, string dir, bool noCache = false)
         {
             // ปรับช่วงวันที่ก่อนส่งเข้า SQL
             // - ถ้าระบุ key เจาะจง (เลขที่ใบคำขอ/สัญญา/serial/เลขบัตร) → ไม่ต้องจำกัดวันที่ ค้นได้ทั้งหมด
@@ -694,15 +696,118 @@ namespace App.Controllers
                 ? ApplicationIdBounds.NoBound
                 : await _idBounds.GetLowerBoundAsync(startDate);
 
+            string quick = Nz(model.quickSearch);
+
+            // ทางปกติ — ดึงเฉพาะแถวของหน้านี้ เหมือนเดิมทุกอย่าง ไม่มีอะไรเพิ่ม
+            if (quick == null)
+            {
+                _lastQuickScanned = 0;
+                _lastQuickTruncated = false;
+                var page = await FetchComposedAsync(model, startDate, endDate, accountNo, applicationCode,
+                                                    productSerialNo, customerId, idLowerBound, offset, take, sort, dir);
+                _lastReadAtUtc = page.ReadAtUtc;
+                return page.Rows;
+            }
+
             // ค้นในผลลัพธ์ — ครึ่งหนึ่งของคอลัมน์ที่ผู้ใช้เห็น (สถานะสัญญา รับสินค้า ลงทะเบียน
             // NewSale Payment) ไม่ได้อยู่ในคำสั่งหลัก แต่มาจากรอบที่ 2 จึงกรองที่ SQL ไม่ได้
             // ต้องดึงผลลัพธ์ทั้งชุดมาประกอบให้ครบก่อน แล้วค่อยกรองด้วยข้อความที่แสดงบนตารางจริง
-            // แบบเดียวกับช่อง Search ของตารางเดิม
-            string quick = Nz(model.quickSearch);
-            int fetchOffset = quick == null ? offset : 0;
-            int fetchTake = quick == null
-                ? take
-                : Math.Min(ExportMaxRows, Math.Max(QuickScanMaxRows, offset + take));
+            int scanTake = Math.Min(ExportMaxRows, Math.Max(QuickScanMaxRows, offset + take));
+            var set = await GetComposedSetAsync(model, startDate, endDate, accountNo, applicationCode,
+                                                productSerialNo, customerId, idLowerBound, scanTake, sort, dir, noCache);
+
+            _lastReadAtUtc = set.ReadAtUtc;
+            _lastQuickScanned = set.Rows.Count;
+            _lastQuickTruncated = set.SetTotal > set.Rows.Count;
+
+            var matched = set.Rows.Where(r => MatchesQuickSearch(r, quick)).ToList();
+            Log.Information("ค้นในผลลัพธ์ \"{Term}\": ตรง {Matched} จาก {Scanned} แถวที่ไล่ดู (ทั้งชุด {Total})",
+                quick, matched.Count, set.Rows.Count, set.SetTotal);
+
+            var slice = matched.Skip(offset).Take(take).ToList();
+            foreach (var row in slice) { row.TotalRows = matched.Count; }
+            return slice;
+        }
+
+        /// <summary>ชุดผลลัพธ์ที่ประกอบเสร็จแล้ว พร้อมยอดรวมทั้งชุดและเวลาที่อ่านมาจริง</summary>
+        private sealed record ComposedSet(List<ApplicationResponeModel> Rows, int SetTotal, DateTime ReadAtUtc);
+
+        /// <summary>
+        /// ชุดผลลัพธ์สำหรับค้นในผลลัพธ์ — เก็บไว้ใช้ซ้ำ เพราะส่วนที่แพงไม่ได้ขึ้นกับคำค้น
+        ///
+        /// การค้นในผลลัพธ์แพงตรงดึง+ประกอบชุดผลลัพธ์ ซึ่งเป็นงานเดิมทุกครั้งไม่ว่าจะพิมพ์คำอะไร
+        /// เปลี่ยนแค่ขั้นกรองท้ายสุดที่ทำในหน่วยความจำและแทบไม่กินเวลา ถ้าไม่เก็บไว้
+        /// พิมพ์ทีละตัวจะกลายเป็นดึงชุดเดิมซ้ำ ๆ ทั้งที่ข้อมูลชุดนั้นอยู่ในมือแล้ว
+        ///
+        /// key ไม่มีคำค้นและไม่มีเลขหน้า — พิมพ์ต่อ เปลี่ยนหน้า หรือเปลี่ยนจำนวนต่อหน้า
+        /// จึงใช้ชุดเดิมได้หมด · มีเลขรุ่นของ InvalidateSearchCache อยู่ใน key
+        /// พอมีใครทำรายการที่เปลี่ยนข้อมูล ชุดที่เก็บไว้จะใช้ไม่ได้ทันทีเหมือนผลค้นหาปกติ
+        /// </summary>
+        private async Task<ComposedSet> GetComposedSetAsync(
+            ApplicationRq model, string startDate, string endDate,
+            string accountNo, string applicationCode, string productSerialNo, string customerId,
+            int idLowerBound, int scanTake, string sort, string dir, bool noCache)
+        {
+            Task<ComposedSet> Load() => FetchComposedAsync(model, startDate, endDate, accountNo, applicationCode,
+                                                           productSerialNo, customerId, idLowerBound, 0, scanTake, sort, dir);
+
+            if (_cacheSeconds <= 0) return await Load();
+
+            var key = BuildQuickSetCacheKey(model, startDate, endDate, accountNo, applicationCode,
+                                            productSerialNo, customerId, idLowerBound, scanTake, sort, dir);
+
+            if (!noCache && _cache.TryGetValue(key, out ComposedSet hit)) return hit;
+
+            // กันหลายคำขอวิ่งไปดึงชุดเดียวกันพร้อมกันตอนผู้ใช้พิมพ์รัว ๆ
+            var gate = CacheLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+            await gate.WaitAsync();
+            try
+            {
+                if (!noCache && _cache.TryGetValue(key, out ComposedSet hit2)) return hit2;
+
+                var loaded = await Load();
+
+                // อายุสั้นเท่าผลค้นหาปกติเป็นอย่างน้อย แต่ยืดให้พอกับช่วงที่ผู้ใช้กำลังพิมพ์อยู่
+                // sliding ต่ออายุระหว่างพิมพ์ · absolute กันไม่ให้ข้อมูลค้างเกินครึ่งนาที
+                // เพราะหน้าจอนี้ต้องบอกได้เสมอว่าข้อมูลสดแค่ไหน
+                var ttl = TimeSpan.FromSeconds(Math.Max(_cacheSeconds, QuickSetCacheSeconds));
+                _cache.Set(key, loaded, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = ttl,
+                    SlidingExpiration = TimeSpan.FromSeconds(Math.Min(10, ttl.TotalSeconds))
+                });
+                return loaded;
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        /// <summary>
+        /// key ของชุดผลลัพธ์ที่เก็บไว้ให้การค้นในผลลัพธ์ใช้ซ้ำ
+        ///
+        /// จงใจไม่มีคำค้นและไม่มีเลขหน้าอยู่ใน key — สองอย่างนี้ไม่ได้เปลี่ยนว่าต้องไปอ่านอะไรจากฐานข้อมูล
+        /// เปลี่ยนแค่ขั้นกรองกับตัดหน้าที่ทำในหน่วยความจำ ถ้าใส่เข้าไปจะกลายเป็นดึงชุดเดิมใหม่ทุกตัวอักษร
+        /// </summary>
+        private static string BuildQuickSetCacheKey(
+            ApplicationRq model, string startDate, string endDate,
+            string accountNo, string applicationCode, string productSerialNo, string customerId,
+            int idLowerBound, int scanTake, string sort, string dir)
+        {
+            return string.Join("|", "quickset", InvalidateSearchCacheAttribute.Version,
+                startDate, endDate, Nz(model.status), Nz(model.loanTypeCate),
+                accountNo, applicationCode, productSerialNo, customerId,
+                Nz(model.CustomerName), Nz(model.StatusRegis), idLowerBound, scanTake, sort, dir);
+        }
+
+        /// <summary>ดึงแถวตามช่วงที่ระบุแล้วประกอบข้อมูลประกอบให้ครบ — รอบที่ 1 + รอบที่ 2</summary>
+        private async Task<ComposedSet> FetchComposedAsync(
+            ApplicationRq model, string startDate, string endDate,
+            string accountNo, string applicationCode, string productSerialNo, string customerId,
+            int idLowerBound, int offset, int take, string sort, string dir)
+        {
+            var readAtUtc = DateTime.UtcNow;
 
             using var connection = new SqlConnection(strConnString);
             await connection.OpenAsync();
@@ -724,8 +829,8 @@ namespace App.Controllers
                 CustomerName = Nz(model.CustomerName),
                 StatusRegis = Nz(model.StatusRegis),
                 idLowerBound,
-                offset = fetchOffset,
-                pageSize = fetchTake
+                offset,
+                pageSize = take
             }, commandTimeout: 120))).ToList();
 
             _lastPageMs = sw.ElapsedMilliseconds;
@@ -734,9 +839,7 @@ namespace App.Controllers
             if (pageRows.Count == 0)
             {
                 _lastEnrichMs = 0;
-                _lastQuickScanned = 0;
-                _lastQuickTruncated = false;
-                return new List<ApplicationResponeModel>();
+                return new ComposedSet(new List<ApplicationResponeModel>(), 0, readAtUtc);
             }
 
             // ---- รอบที่ 2: ดึงข้อมูลประกอบ "เฉพาะคีย์ของหน้านี้" ----
@@ -786,27 +889,7 @@ namespace App.Controllers
                 return item;
             }).ToList();
 
-            if (quick == null)
-            {
-                _lastQuickScanned = 0;
-                _lastQuickTruncated = false;
-                return composed;
-            }
-
-            // ---- ค้นในผลลัพธ์: กรองหลังประกอบแถวเสร็จ แล้วแบ่งหน้าเองที่นี่ ----
-            // ต้องบอกด้วยว่าไล่ดูไปกี่แถว ถ้าชุดผลลัพธ์ใหญ่เกินเพดานแล้วไปตัดเงียบ ๆ
-            // ผู้ใช้จะเข้าใจว่า "ไม่มี" ทั้งที่จริงคือ "ยังไม่ได้ดูถึง"
-            int setTotal = pageRows[0].TotalRows;
-            _lastQuickScanned = pageRows.Count;
-            _lastQuickTruncated = setTotal > pageRows.Count;
-
-            var matched = composed.Where(r => MatchesQuickSearch(r, quick)).ToList();
-            Log.Information("ค้นในผลลัพธ์ \"{Term}\": ตรง {Matched} จาก {Scanned} แถวที่ไล่ดู (ทั้งชุด {Total})",
-                quick, matched.Count, pageRows.Count, setTotal);
-
-            var slice = matched.Skip(offset).Take(take).ToList();
-            foreach (var row in slice) { row.TotalRows = matched.Count; }
-            return slice;
+            return new ComposedSet(composed, pageRows[0].TotalRows, readAtUtc);
         }
 
         /// <summary>
@@ -1009,6 +1092,12 @@ namespace App.Controllers
         /// </summary>
         private const int QuickScanMaxRows = 5000;
 
+        /// <summary>
+        /// อายุอย่างน้อยของชุดผลลัพธ์ที่เก็บไว้ให้การค้นในผลลัพธ์ใช้ซ้ำ (วินาที)
+        /// ต้องยาวพอครอบช่วงที่ผู้ใช้กำลังพิมพ์คำค้น แต่สั้นพอที่จะไม่ให้เห็นสถานะเก่าค้าง
+        /// </summary>
+        private const int QuickSetCacheSeconds = 30;
+
         // แปลงค่าว่าง/ช่องว่างให้เป็น null เพื่อให้เงื่อนไข (@p IS NULL OR ...) ใน SQL ทำงานถูกต้อง
         private static string Nz(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
@@ -1019,6 +1108,12 @@ namespace App.Controllers
         /// <summary>จำนวนแถวที่ไล่ดูจริงในการค้นในผลลัพธ์รอบล่าสุด และไล่ดูไม่ครบทั้งชุดหรือไม่</summary>
         private int _lastQuickScanned;
         private bool _lastQuickTruncated;
+
+        /// <summary>
+        /// เวลาที่อ่านข้อมูลชุดนี้จากฐานข้อมูลจริง
+        /// การค้นในผลลัพธ์อาจใช้ชุดที่เก็บไว้ก่อนหน้า จะบอกว่า "ข้อมูลสด" ทุกครั้งไม่ได้
+        /// </summary>
+        private DateTime _lastReadAtUtc = DateTime.UtcNow;
 
         /// <summary>จัดกลุ่มการค้นตามรูปแบบ เพื่อให้หน้าสถิติเทียบของที่เทียบกันได้</summary>
         private static string DescribeSearchShape(ApplicationRq m)
