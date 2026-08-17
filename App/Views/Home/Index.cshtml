@@ -40,25 +40,19 @@
                 @* เดิมมีให้เลือกแค่ 3 สถานะ ใบที่อยู่สถานะอื่นจึงกรองหาไม่ได้เลย
                    ต้องรู้เลขที่ใบคำขอมาก่อนถึงจะหาเจอ
 
-                   ไม่ใส่ NEW เพราะใบที่สถานะ NEW ยังไม่มีข้อมูลใน ApplicationExtend สักใบ
-                   ผลค้นหาจึงเป็นศูนย์เสมอ ใส่ไว้จะทำให้เข้าใจผิดว่าไม่มีใบคำขอในสถานะนั้น *@
+                   รายชื่อกับคำไทยมาจาก ApplicationStatusText ที่เดียว — ชุดเดียวกับคำไทย
+                   ที่แสดงบนตารางและที่ช่องค้นในผลลัพธ์รับ ถ้าแยกกันเขียนจะเพี้ยนกันเองภายหลัง *@
                 <select class="form-select" name="status" id="status">
                     <option value="">ทั้งหมด</option>
-                    <optgroup label="ปิดงานแล้ว">
-                        <option value="CLOSED">CLOSED — ปิดงาน</option>
-                        <option value="CANCELLED">CANCELLED — ยกเลิก</option>
-                        <option value="REJECTED">REJECTED — ปฏิเสธ</option>
-                    </optgroup>
-                    <optgroup label="ระหว่างดำเนินการ">
-                        <option value="CLOSING">CLOSING — กำลังปิดงาน</option>
-                        <option value="DRAFT">DRAFT — ร่าง</option>
-                        <option value="SUBMITTED">SUBMITTED — ส่งพิจารณา</option>
-                        <option value="REVIEWING">REVIEWING — กำลังพิจารณา</option>
-                        <option value="NCB">NCB — ตรวจ NCB</option>
-                        <option value="NEEDMOREINFO">NEEDMOREINFO — ขอเอกสารเพิ่ม</option>
-                        <option value="REVISING">REVISING — ส่งกลับให้แก้ไข</option>
-                        <option value="PENDING">PENDING — รอดำเนินการ</option>
-                    </optgroup>
+                    @foreach (var statusGroup in App.Data.ApplicationStatusText.SelectableGroups())
+                    {
+                        <optgroup label="@statusGroup.Key">
+                            @foreach (var s in statusGroup)
+                            {
+                                <option value="@s.Code">@s.Code — @s.Thai</option>
+                            }
+                        </optgroup>
+                    }
                 </select>
             </div>
             <div>
@@ -113,7 +107,7 @@
         <div class="quick-search">
             <i class="fa-solid fa-magnifying-glass"></i>
             <input type="text" id="quickSearch" class="form-control form-control-sm"
-                   placeholder="ค้นในผลลัพธ์ — สาขา พนักงานขาย ชื่อสินค้า เบอร์โทร หรือข้อความสถานะ เช่น พบรายการซ้ำ"
+                   placeholder="ค้นในผลลัพธ์ — สาขา พนักงานขาย ชื่อสินค้า เบอร์โทร หรือสถานะเป็นคำไทย เช่น ยกเลิก · รอลงนาม · พบรายการซ้ำ"
                    autocomplete="off" />
             <button type="button" id="quickSearchClear" class="quick-clear" title="ล้างคำค้น (Esc)" hidden>
                 <i class="fa-solid fa-xmark"></i>

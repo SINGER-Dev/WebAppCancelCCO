@@ -60,6 +60,13 @@
         public string? ProductSerialNo { get; set; }
 
         public string? ApplicationStatusId { get; set; }
+
+        /// <summary>
+        /// คำไทยของสถานะใบคำขอ — แสดงใต้ป้ายรหัสสถานะ และเป็นคำที่ช่องค้นในผลลัพธ์รับด้วย
+        /// (ว่างได้ ถ้าเจอรหัสที่ยังไม่มีคำไทยกำกับไว้ใน ApplicationStatusText)
+        /// </summary>
+        public string? StatusText { get; set; }
+
         public string? LineStatus { get; set; }
         public string? SignedStatus { get; set; }
         public string? StatusReceived { get; set; }

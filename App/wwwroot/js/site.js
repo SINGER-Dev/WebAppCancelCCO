@@ -897,6 +897,12 @@
         // สีของป้ายสถานะดูที่ "สถานะ" อย่างเดียว — CLOSED คือปิดงานแล้ว ต้องเป็นเขียว
         // (เดิมผูกสีไว้กับเงื่อนไขของปุ่มส่งสถานะซ้ำ ใบที่ CLOSED แล้วแต่ยังไม่ครบทุกขั้น
         //  เลยขึ้นเป็นเหลือง ทั้งที่สถานะจริงคือปิดงานแล้ว)
+        // คำไทยใต้ป้ายสถานะ — ผู้ใช้เรียกสถานะเป็นไทยเสมอ ("ใบที่ยกเลิก" ไม่ใช่ "ใบที่ CANCELLED")
+        // และช่องค้นในผลลัพธ์รับคำไทยพวกนี้ด้วย จึงต้องเห็นบนจอ ไม่งั้นไม่มีทางรู้ว่าพิมพ์คำไหนได้
+        var statusThai = r.statusText
+            ? '<div class="cell-label">' + esc(r.statusText) + '</div>'
+            : '';
+
         var statusCell = statusBadge(r.applicationStatusId)
             + (r.canPushStatusClosed
                 ? fixIcon('C100StatusClosed', r.applicationCode, 'ส่งสถานะ CLOSED ไปปลายทางอีกครั้ง')
@@ -904,7 +910,8 @@
             + (r.canRenotifyCancel
                 ? fixIcon('RenotifyCancel', r.applicationCode,
                           'ใบคำขอนี้ยกเลิกแล้วแต่ e-contract ยังไม่รับรู้ — กดเพื่อแจ้งยกเลิกซ้ำ')
-                : '');
+                : '')
+            + statusThai;
 
         var contractCell =
             '<div><span class="cell-label">จำนวนสัญญา</span> ' + badge(r.numDoc, r.numDoc === 'ปกติ') +

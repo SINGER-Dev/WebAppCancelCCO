@@ -550,6 +550,7 @@ namespace App.Controllers
                 ProductModelName = r.ProductModelName,
                 ProductSerialNo = r.ProductSerialNo,
                 ApplicationStatusId = r.ApplicationStatusID,
+                StatusText = App.Data.ApplicationStatusText.Thai(r.ApplicationStatusID),
                 LineStatus = r.LINE_STATUS,
                 SignedStatus = r.signedStatus,
                 StatusReceived = r.statusReceived,
@@ -908,7 +909,9 @@ namespace App.Controllers
                 || Has(r.AccountNo) || Has(r.CustomerID) || Has(r.Cusname) || Has(r.cusMobile)
                 || Has(r.SaleDepCode) || Has(r.SaleDepName) || Has(r.SaleName) || Has(r.SaleTelephoneNo)
                 || Has(r.ProductModelName) || Has(r.ProductSerialNo)
-                || Has(r.ApplicationStatusID)
+                // สถานะใบคำขอค้นได้ทั้งรหัส (CANCELLED) และคำไทยที่คนเรียกกันจริง (ยกเลิก)
+                // คำไทยไม่ได้อยู่ในฐานข้อมูล แต่แสดงอยู่ใต้ป้ายสถานะบนตาราง จึงต้องค้นเจอด้วย
+                || Has(r.ApplicationStatusID) || Has(App.Data.ApplicationStatusText.Thai(r.ApplicationStatusID))
                 // คอลัมน์ "สถานะสัญญา" และ "ตรวจสอบ" — ข้อความที่ประกอบขึ้นใน Compose
                 || Has(r.numdoc) || Has(r.signedStatus) || Has(r.statusReceived)
                 || Has(r.numregis) || Has(r.newnum) || Has(r.paynum);
