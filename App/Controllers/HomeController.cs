@@ -606,11 +606,13 @@ namespace App.Controllers
 
                 await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
 
+                // "สถานะ (ไทย)" แยกเป็นคอลัมน์ของตัวเอง ไม่รวมกับรหัสในช่องเดียว
+                // เพราะไฟล์นี้ถูกเอาไป pivot/กรองใน Excel ต่อ ถ้าปนกันจะกรองตามรหัสไม่ได้
                 await writer.WriteLineAsync(string.Join(",", new[]
                 {
                     "วันที่สร้างใบคำขอ", "เลขที่ใบคำขอ", "RefCode", "เลขที่สัญญา", "เลขบัตรประชาชน",
                     "ชื่อลูกค้า", "เบอร์โทรศัพท์ลูกค้า", "รหัสสาขา", "ชื่อสาขา", "ชื่อพนักงานขาย",
-                    "เบอร์พนักงานขาย", "ชื่อสินค้า", "Serial / IMEI", "สถานะ", "จำนวนสัญญา",
+                    "เบอร์พนักงานขาย", "ชื่อสินค้า", "Serial / IMEI", "สถานะ", "สถานะ (ไทย)", "จำนวนสัญญา",
                     "สถานะสัญญา", "สถานะรับสินค้า", "ลงทะเบียนเครื่อง", "NewSale", "NewPayment",
                     "ประเภทรายการ", "OU"
                 }.Select(Csv)));
@@ -621,7 +623,8 @@ namespace App.Controllers
                     {
                         r.ApplicationDate, r.ApplicationCode, r.RefCode, r.AccountNo, r.CustomerID,
                         r.Cusname, r.cusMobile, r.SaleDepCode, r.SaleDepName, r.SaleName,
-                        r.SaleTelephoneNo, r.ProductModelName, r.ProductSerialNo, r.ApplicationStatusID, r.numdoc,
+                        r.SaleTelephoneNo, r.ProductModelName, r.ProductSerialNo,
+                        r.ApplicationStatusID, App.Data.ApplicationStatusText.Thai(r.ApplicationStatusID), r.numdoc,
                         r.signedStatus, r.statusReceived, r.numregis, r.newnum, r.paynum,
                         r.loanTypeCate, r.OU_Code
                     }.Select(Csv)));
