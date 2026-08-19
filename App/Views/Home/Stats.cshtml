@@ -5,7 +5,69 @@
     var startedAt = (DateTime)ViewBag.StartedAt;
     var cacheSeconds = (int)ViewBag.CacheSeconds;
     var totalCalls = stats.Sum(s => s.Count);
+
+    var writesAllowed = (bool)(ViewBag.WritesAllowed ?? false);
+    var writeEnvRaw = (string)(ViewBag.WriteEnvRaw ?? "");
+    var environmentName = (string)(ViewBag.EnvironmentName ?? "");
 }
+
+@* โหมดการเขียน — ตอบคำถาม "ตั้ง App__AllowWrites แล้วทำไมยังกดปุ่มซ่อมไม่ได้"
+   โดยไม่ต้องเข้าไปดูบนเครื่องเซิร์ฟเวอร์ ค่าที่แสดงคือค่าที่ "โปรเซสนี้" เห็นจริง *@
+<div class="filter-card mb-3">
+    <div class="filter-card-head">
+        <span class="filter-card-title">โหมดการเขียนข้อมูล</span>
+        <span class="filter-card-hint">
+            @if (writesAllowed)
+            {
+                <span class="text-success">เขียนได้ — ปุ่มซ่อมทุกปุ่มทำงานตามปกติ</span>
+            }
+            else
+            {
+                <span class="text-warning">อ่านอย่างเดียว — ปุ่มที่เปลี่ยนข้อมูลจะถูกปฏิเสธทั้งหมด</span>
+            }
+        </span>
+    </div>
+
+    <table class="table table-sm mb-0">
+        <tbody>
+            <tr>
+                <td style="width:280px">ค่าที่ระบบใช้จริง (App:AllowWrites)</td>
+                <td><code>@writesAllowed.ToString().ToLowerInvariant()</code></td>
+            </tr>
+            <tr>
+                <td>ตัวแปร <code>App__AllowWrites</code> ที่โปรเซสเห็น</td>
+                <td>
+                    @if (string.IsNullOrEmpty(writeEnvRaw))
+                    {
+                        <span class="text-warning">
+                            (ไม่มี) — โปรเซสนี้ไม่เห็นตัวแปรเลย
+                            @if (!writesAllowed)
+                            {
+                                <text>
+                                    · ตั้งไว้ระดับเครื่องหลัง application pool เริ่มทำงานแล้วจะยังไม่เข้ามา
+                                    ต้องรีไซเคิล pool หรือประกาศไว้ใน web.config
+                                    (<code>&lt;aspNetCore&gt;&lt;environmentVariables&gt;</code>)
+                                    ส่วนที่ตั้งใน session ของคนที่ deploy จะไม่ถึงโปรเซส
+                                </text>
+                            }
+                        </span>
+                    }
+                    else
+                    {
+                        <code>@writeEnvRaw</code>
+                        <span class="text-muted">
+                            @(writesAllowed ? "" : "· โปรเซสเห็นค่านี้แล้วแต่แปลงเป็น true ไม่ได้ (ต้องเป็น true ตัวเล็ก ไม่ต้องมีเครื่องหมายคำพูด)")
+                        </span>
+                    }
+                </td>
+            </tr>
+            <tr>
+                <td>Environment ที่กำลังรัน</td>
+                <td><code>@environmentName</code> <span class="text-muted">· ใช้ไฟล์ appsettings.@(environmentName).json ถ้ามี</span></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
 
 <div class="filter-card mb-3">
     <div class="filter-card-head">
