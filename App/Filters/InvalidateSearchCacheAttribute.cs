@@ -1,7 +1,4 @@
-﻿using App.Models;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Filters;
-using Serilog;
+﻿using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace App.Filters
 {
@@ -22,34 +19,9 @@ namespace App.Filters
     {
         private static long _version;
 
-        /// <summary>
-        /// อนุญาตให้เขียนข้อมูลหรือไม่ — ตั้งจาก config (App:AllowWrites)
-        ///
-        /// ค่าตั้งต้นคือ "ไม่อนุญาต" โดยตั้งใจ ถ้าลืมตั้งค่าหรือหยิบ config ผิดไฟล์
-        /// ระบบจะปฏิเสธการเขียนไว้ก่อน ปลอดภัยกว่าปล่อยให้เขียนได้แล้วมารู้ทีหลัง
-        /// ใช้กับทุก action ที่เปลี่ยนข้อมูล ไม่ว่าจะเป็นการเขียนฐานข้อมูลหรือสั่งงานระบบปลายทาง
-        /// </summary>
-        private static bool _allowWrites;
-
-        public static void ConfigureWrites(bool allow) => _allowWrites = allow;
-
         public static long Version => Interlocked.Read(ref _version);
 
         public static void Bump() => Interlocked.Increment(ref _version);
-
-        public override void OnActionExecuting(ActionExecutingContext context)
-        {
-            if (_allowWrites) return;
-
-            var path = context.HttpContext.Request.Path.Value;
-            Log.Warning("ปฏิเสธการเขียนข้อมูลที่ {Path} — ระบบตั้งเป็นโหมดอ่านอย่างเดียวอยู่", path);
-
-            context.Result = new JsonResult(ActionResultDto.Fail(
-                "ระบบนี้เปิดให้ดูข้อมูลได้อย่างเดียว ยังทำรายการที่แก้ไขข้อมูลไม่ได้"))
-            {
-                StatusCode = StatusCodes.Status403Forbidden
-            };
-        }
 
         public override void OnActionExecuted(ActionExecutedContext context)
         {

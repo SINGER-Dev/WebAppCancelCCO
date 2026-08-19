@@ -103,34 +103,6 @@ namespace App.Controllers
 
         public static void ConfigureCache(int seconds) => _cacheSeconds = Math.Max(0, seconds);
 
-        /// <summary>
-        /// โหมดการเขียนที่ระบบใช้อยู่จริง พร้อมที่มาของค่า — ให้หน้าสถิติแสดงได้
-        ///
-        /// มีไว้เพราะเวลาตั้ง App__AllowWrites=true แล้วยังกดปุ่มซ่อมไม่ได้ คนที่เจอปัญหา
-        /// มักไม่มีสิทธิ์เข้าไปดู log หรือ env บนเครื่องเซิร์ฟเวอร์ ต้องเดาว่าตั้งผิดชื่อ
-        /// ตั้งผิดที่ หรือยังไม่ได้รีสตาร์ท — สามอย่างนี้แยกออกจากกันได้ทันทีถ้าระบบยอมบอกว่า
-        /// "ตัวโปรเซสเห็นค่าอะไรอยู่"
-        /// </summary>
-        private static bool _writesAllowed;
-        private static string _writeEnvRaw = "";
-        private static string _environmentName = "";
-
-        public static void ConfigureWriteMode(bool allowed, string? envRaw, string environmentName)
-        {
-            _writesAllowed = allowed;
-            _writeEnvRaw = envRaw ?? "";
-            _environmentName = environmentName ?? "";
-            Log.Information(
-                "โหมดการเขียนข้อมูล: {Mode} · App:AllowWrites ที่อ่านได้ = {Value} · ตัวแปร App__AllowWrites ที่โปรเซสเห็น = {Env} · Environment = {EnvName}",
-                allowed ? "เขียนได้" : "อ่านอย่างเดียว",
-                allowed,
-                string.IsNullOrEmpty(envRaw) ? "(ไม่มี)" : envRaw,
-                environmentName);
-        }
-
-        public static bool WritesAllowed => _writesAllowed;
-        public static string WriteEnvRaw => _writeEnvRaw;
-        public static string EnvironmentName => _environmentName;
 
         public HomeController(ILogger<HomeController> logger, IDownstreamApi api, IMemoryCache cache,
                               IConfiguration configuration, ApplicationIdBounds idBounds)
@@ -676,9 +648,6 @@ namespace App.Controllers
             ViewBag.Stats = SearchMetrics.Snapshot();
             ViewBag.StartedAt = SearchMetrics.StartedAt;
             ViewBag.CacheSeconds = _cacheSeconds;
-            ViewBag.WritesAllowed = _writesAllowed;
-            ViewBag.WriteEnvRaw = _writeEnvRaw;
-            ViewBag.EnvironmentName = _environmentName;
             return View();
         }
 

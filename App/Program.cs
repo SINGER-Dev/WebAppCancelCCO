@@ -68,23 +68,6 @@ App.Controllers.HomeController.ConfigureCache(builder.Configuration.GetValue("Se
 // อ่านข้อมูลของวันนี้เป็นระยะ เพื่อไม่ให้ผู้ใช้คนแรกของช่วงต้องรอ query ที่ข้อมูลหลุดจากหน่วยความจำ
 builder.Services.AddHostedService<SearchPrewarmService>();
 
-// เปิดการเขียนข้อมูลเฉพาะเมื่อระบุไว้ชัดเจนเท่านั้น — ไม่ระบุ = อ่านอย่างเดียว
-var allowWrites = builder.Configuration.GetValue("App:AllowWrites", false);
-App.Filters.InvalidateSearchCacheAttribute.ConfigureWrites(allowWrites);
-
-// บอกให้ชัดตั้งแต่ตอนบูตว่าโหมดไหน และค่ามาจากไหน
-//
-// เวลาตั้ง App__AllowWrites=true แล้วหน้าจอยังขึ้นว่าอ่านอย่างเดียว คำถามเดียวที่ต้องตอบคือ
-// "โปรเซสนี้เห็นตัวแปรนั้นหรือเปล่า" ซึ่งเดาจากนอกโปรเซสไม่ได้เลย — บน IIS ตัวแปรระดับเครื่อง
-// ที่ตั้งหลัง application pool เริ่มทำงานแล้วจะยังไม่เข้ามา ต้องรีไซเคิล pool หรือประกาศไว้ใน
-// web.config (<aspNetCore><environmentVariables>) ส่วนที่ตั้งไว้ใน session ของคนที่ deploy
-// จะไม่ถึงโปรเซสเลย
-//
-// พิมพ์ทั้งค่าที่อ่านได้จริงและค่าดิบของตัวแปร เพื่อแยก "ไม่เห็นตัวแปร" ออกจาก "เห็นแต่ค่าผิด"
-App.Controllers.HomeController.ConfigureWriteMode(
-    allowWrites,
-    Environment.GetEnvironmentVariable("App__AllowWrites"),
-    builder.Environment.EnvironmentName);
 builder.Logging.ClearProviders().AddConsole();
 builder.Host.UseSerilog();
 
