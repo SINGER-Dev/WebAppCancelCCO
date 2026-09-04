@@ -565,9 +565,11 @@
                     $icon: $icon,
                     url: '/Home/GetAddTNewSalesNewSGFinance',
                     body: { ApplicationCode: $icon.data('applicationcode') },
-                    confirmTitle: 'ส่งรายการขายอีกครั้ง',
-                    confirmDetail: 'ใช้เมื่อลูกค้ารับสินค้าแล้วแต่รายการขายยังไม่ขึ้นในระบบ',
-                    successTitle: 'ส่งรายการขายแล้ว'
+                    confirmTitle: 'สร้าง/ส่ง NewSale + NewPayment',
+                    confirmDetail: 'ใช้เมื่อลูกค้ารับสินค้าแล้วแต่ NewSale/NewPayment ไม่ถูกสร้างในระบบ ' +
+                                   'ระบบจะยิงยืนยันรับสินค้าไปปลายทางเพื่อสร้างรายการขายและรายการชำระใหม่ ' +
+                                   '(ถ้ายังไม่มีรายการยืนยันรับสินค้า ระบบจะแจ้งว่ายังทำไม่ได้)',
+                    successTitle: 'สร้าง NewSale + NewPayment แล้ว'
                 });
             });
 
@@ -961,7 +963,7 @@
         var checkCell =
             '<div><span class="cell-label">ลงทะเบียนเครื่อง</span> ' + badge(r.numRegis, r.numRegis === 'เรียบร้อย') + regisIcon + '</div>' +
             '<div><span class="cell-label">NewSale</span> ' + badge(r.newNum, r.newNum === 'เรียบร้อย') +
-                (r.canRepushNewSale ? fixIcon('GetAddTNewSalesNewSGFinance', r.applicationCode, 'ส่ง NewSale ไปปลายทางอีกครั้ง') : '') + '</div>' +
+                (r.canRepushNewSale ? fixIcon('GetAddTNewSalesNewSGFinance', r.applicationCode, 'สร้าง/ส่ง NewSale + NewPayment ไปปลายทาง — ใช้เมื่อ NewSale/NewPayment ไม่ถูกสร้าง (กดได้ต่อเมื่อยืนยันรับสินค้าแล้ว)') : '') + '</div>' +
             '<div><span class="cell-label">NewPayment</span> ' + badge(r.payNum, r.payNum === 'เรียบร้อย') + '</div>';
 
         return '<tr>' +

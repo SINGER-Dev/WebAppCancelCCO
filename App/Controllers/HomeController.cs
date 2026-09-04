@@ -546,8 +546,13 @@ namespace App.Controllers
                 regisBlockedReason = "ยังลงทะเบียนเครื่องไม่ได้ เพราะ" + string.Join(" และ ", reasons);
             }
 
-            // ปุ่มส่ง NewSale ซ้ำ (แสดงเฉพาะตอนที่ยังไม่มี NewSale)
-            bool canRepushNewSale = signedDone && receivedGoods && ou != "STL" && (r.newnum ?? "").Trim() != "เรียบร้อย";
+            // ปุ่มสร้าง/ส่ง NewSale + NewPayment — ขึ้นเสมอเมื่อยังไม่มี NewSale (newnum ไม่ "เรียบร้อย")
+            // เดิมกันไว้ด้วย signedDone && receivedGoods && ou != "STL" ทำให้เคสที่ NewSale/NewPayment
+            // ไม่ถูกสร้าง (ยิงพลาด/ตกหล่น) แล้วเงื่อนไขข้างต้นไม่ผ่าน ปุ่มไม่ขึ้นเลย CCO แก้เองไม่ได้
+            // ต้องรอ IT — ตอนนี้ให้ขึ้นทุก OU เมื่อ NewSale ยังไม่มี แล้วให้ handler เป็นคนตัดสิน
+            // (GetAddTNewSalesNewSGFinance มี guard เอง: ถ้ายังไม่มีรายการยืนยันรับสินค้า จะตอบ
+            //  error ชัดว่า "ยังส่งซ้ำไม่ได้" — ดีกว่าปุ่มหายเงียบจนแก้ไม่ได้)
+            bool canRepushNewSale = (r.newnum ?? "").Trim() != "เรียบร้อย";
 
             // ปุ่มแจ้งยกเลิกไปยัง e-contract ซ้ำ
             // ขั้นสุดท้ายของการยกเลิกคือแจ้งสถานะไปยัง e-contract ถ้าขั้นนั้นล้ม
