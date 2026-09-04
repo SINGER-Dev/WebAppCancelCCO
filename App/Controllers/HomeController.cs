@@ -634,6 +634,14 @@ namespace App.Controllers
 
                 await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
 
+                // จับ REQ ซ้ำในผลชุดนี้ (RefCode เดียวกันหลายใบ) ให้ไฟล์ export เห็นด้วย
+                // เพื่อให้ CCO กรอง/pivot หาใบซ้ำใน Excel ได้ ไม่ต้องไล่ดูทีละแถวบนจอ
+                var dupRefs = rows
+                    .Where(x => !string.IsNullOrWhiteSpace(x.RefCode))
+                    .GroupBy(x => x.RefCode!.Trim())
+                    .Where(g => g.Count() > 1)
+                    .ToDictionary(g => g.Key, g => g.Count());
+
                 // "สถานะ (ไทย)" แยกเป็นคอลัมน์ของตัวเอง ไม่รวมกับรหัสในช่องเดียว
                 // เพราะไฟล์นี้ถูกเอาไป pivot/กรองใน Excel ต่อ ถ้าปนกันจะกรองตามรหัสไม่ได้
                 await writer.WriteLineAsync(string.Join(",", new[]
@@ -642,11 +650,12 @@ namespace App.Controllers
                     "ชื่อลูกค้า", "เบอร์โทรศัพท์ลูกค้า", "รหัสสาขา", "ชื่อสาขา", "ชื่อพนักงานขาย",
                     "เบอร์พนักงานขาย", "ชื่อสินค้า", "Serial / IMEI", "สถานะ", "สถานะ (ไทย)", "จำนวนสัญญา",
                     "สถานะสัญญา", "สถานะรับสินค้า", "ลงทะเบียนเครื่อง", "NewSale", "NewPayment",
-                    "ประเภทรายการ", "OU"
+                    "ประเภทรายการ", "OU", "REQ ซ้ำ (จำนวนใบ)"
                 }.Select(Csv)));
 
                 foreach (var r in rows)
                 {
+                    var dupN = dupRefs.TryGetValue((r.RefCode ?? "").Trim(), out var c) ? c.ToString() : "";
                     await writer.WriteLineAsync(string.Join(",", new[]
                     {
                         r.ApplicationDate, r.ApplicationCode, r.RefCode, r.AccountNo, r.CustomerID,
@@ -654,7 +663,7 @@ namespace App.Controllers
                         r.SaleTelephoneNo, r.ProductModelName, r.ProductSerialNo,
                         r.ApplicationStatusID, App.Data.ApplicationStatusText.Thai(r.ApplicationStatusID), r.numdoc,
                         r.signedStatus, r.statusReceived, r.numregis, r.newnum, r.paynum,
-                        r.loanTypeCate, r.OU_Code
+                        r.loanTypeCate, r.OU_Code, dupN
                     }.Select(Csv)));
                 }
 
