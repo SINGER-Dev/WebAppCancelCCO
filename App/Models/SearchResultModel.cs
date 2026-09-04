@@ -40,6 +40,20 @@
         public int QuickScanned { get; set; }
     }
 
+    /// <summary>คำขอปิดใบร่างซ้ำ — ใช้ ApplicationID (PK) เพราะใบร่างขยะอาจไม่มี ApplicationCode</summary>
+    public class CloseDuplicateDraftRq
+    {
+        public string? ApplicationID { get; set; }
+    }
+
+    /// <summary>ข้อมูลใบที่ใช้ตรวจก่อนปิด (map จาก Dapper) — สถานะ + RefCode ของใบร่างที่จะปิด</summary>
+    public class DraftInfoRow
+    {
+        public string? Status { get; set; }
+        public string? RefCode { get; set; }
+        public string? AppCode { get; set; }
+    }
+
     public class SearchRowDto
     {
         public string? ApplicationCode { get; set; }
@@ -95,5 +109,23 @@
 
         /// <summary>เหตุผลที่ยังกดลงทะเบียนเครื่องไม่ได้ (null = กดได้ หรือทำไปแล้ว) — ใช้อธิบายบนหน้าจอ</summary>
         public string? RegisBlockedReason { get; set; }
+
+        /// <summary>
+        /// ใบคำขอนี้มี RefCode (เลข REQ) ซ้ำกับใบอื่นในผลค้นหาชุดเดียวกัน — เกิดจาก SGF+/LOS
+        /// สร้างใบซ้ำต่อ REQ เดียว (ใบจริง 1 + ใบร่างขยะที่เหลือ) ใช้ขึ้น badge เตือนที่หน้าจอ
+        /// </summary>
+        public bool IsDuplicateReq { get; set; }
+
+        /// <summary>จำนวนใบทั้งหมดที่ใช้ RefCode เดียวกันในผลค้นหาชุดนี้ (>1 เมื่อ IsDuplicateReq)</summary>
+        public int DuplicateReqCount { get; set; }
+
+        /// <summary>ApplicationID (PK) — ใช้ปิดใบร่างขยะที่ไม่มี ApplicationCode ได้ (ApplicationCode อาจว่าง)</summary>
+        public string? ApplicationID { get; set; }
+
+        /// <summary>
+        /// ใบนี้เป็น "ใบร่างขยะ" ที่ปิดได้ = REQ ซ้ำ + status DRAFT + ในกลุ่ม RefCode เดียวกัน
+        /// มีใบจริง (ApplicationCode + เดินหน้าแล้ว) อยู่ด้วย จึงปิดใบร่างนี้ทิ้งได้อย่างปลอดภัย
+        /// </summary>
+        public bool CanCloseDuplicateDraft { get; set; }
     }
 }

@@ -584,6 +584,19 @@
                 });
             });
 
+            $(document).on('click', '.CloseDuplicateDraft', function () {
+                var $icon = $(this);
+                runFixAction({
+                    $icon: $icon,
+                    url: '/Home/CloseDuplicateDraft',
+                    body: { ApplicationID: $icon.data('applicationid') },
+                    confirmTitle: 'ปิดใบร่างซ้ำ',
+                    confirmDetail: 'REQ นี้มีใบร่าง (DRAFT) ซ้ำที่ไม่มีเลขใบคำขอค้างอยู่ ระบบจะปิดเฉพาะใบร่างนี้ ' +
+                                   'โดยคงใบจริงที่เดินหน้าแล้วไว้ ปิดได้ต่อเมื่อมีใบจริงของ REQ นี้อยู่ในระบบแล้วเท่านั้น',
+                    successTitle: 'ปิดใบร่างซ้ำแล้ว'
+                });
+            });
+
             $(document).on('click', '.RegisIMEI', function () {
                 var $icon = $(this);
                 runFixAction({
@@ -628,6 +641,7 @@
     var QUICK_DELAY = 500;      // หน่วงให้พอพิมพ์คำไทยจบคำ ไม่ยิงกลางคำ
     var quickTimer = null;
     var quickApplied = '';      // คำที่ยิงไปแล้วจริง ๆ — ใช้เทียบว่าควรยิงซ้ำไหม
+    var lastRes = null;         // ผลค้นหาชุดล่าสุด — เก็บไว้ re-render ตอนสลับ "เฉพาะใบซ้ำ"
     var quickTruncated = false; // server ไล่ดูไม่ครบทั้งชุดเพราะผลลัพธ์ใหญ่เกินเพดาน
     var quickScanned = 0;       // ไล่ดูไปกี่แถว
 
@@ -714,6 +728,11 @@
 
     // อัปเดตอัตโนมัติ — ทำให้หน้านี้เป็นกระดานเฝ้าดูจริง ๆ แทนที่จะเป็นภาพนิ่ง
     var autoTimer = null;
+    // สลับ "เฉพาะใบซ้ำ" — กรองในผลชุดเดิม ไม่ยิง server ใหม่ (badge/ปุ่มถูกคำนวณมากับผลแล้ว)
+    $(document).on('change', '#dupOnly', function () {
+        if (lastRes) { renderResults(null); }
+    });
+
     $(document).on('change', '#autoRefresh', function () {
         if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
         if ($(this).is(':checked')) {
@@ -847,12 +866,27 @@
     var rowsByCode = {};
 
     function renderResults(res) {
-        var rows = (res && res.data) || [];
+        // เก็บผลชุดล่าสุดไว้ เพื่อ re-render ตอนสลับ "เฉพาะใบซ้ำ" โดยไม่ต้องยิง server ใหม่
+        if (res) { lastRes = res; }
+        var allRows = (lastRes && lastRes.data) || [];
+        var dupOnly = $('#dupOnly').is(':checked');
+        var rows = dupOnly ? allRows.filter(function (r) { return r.isDuplicateReq; }) : allRows;
         rowsByCode = {};
-        rows.forEach(function (r) { if (r.applicationCode) { rowsByCode[r.applicationCode] = r; } });
-        var meta = (res && res.meta) || {};
+        allRows.forEach(function (r) { if (r.applicationCode) { rowsByCode[r.applicationCode] = r; } });
+        var meta = (lastRes && lastRes.meta) || {};
 
         $('#searchAlert').empty();
+
+        // กรอง "เฉพาะใบซ้ำ" แล้วไม่เหลืออะไรในหน้านี้ — บอกให้ชัด อย่าไปเข้าเงื่อนไข "ไม่พบคำค้น"
+        if (dupOnly && !rows.length) {
+            $('#searchTableBody').html('<tr class="no-match-row"><td colspan="8">' +
+                'ไม่มีใบซ้ำ (REQ ซ้ำ) ในหน้านี้ — เอาเครื่องหมาย “เฉพาะใบซ้ำ” ออกเพื่อดูทั้งหมด</td></tr>');
+            $('#searchTableWrap').prop('hidden', false);
+            renderToolbar(meta);
+            renderPager(meta);
+            renderSortIndicator(meta);
+            return;
+        }
 
         quickTruncated = quickApplied !== '' && meta.quickTruncated === true;
         quickScanned = meta.quickScanned || 0;
@@ -939,6 +973,17 @@
                 '<div class="v-strong">' + esc(r.applicationDate) + '</div>' +
                 '<div><span class="cell-label">เลขที่ใบคำขอ</span> ' + esc(r.applicationCode) + '</div>' +
                 '<div class="cell-label">' + esc(r.refCode) + '</div>' +
+                // REQ ซ้ำ: RefCode เดียวกันมีหลายใบในผลค้นหานี้ (ใบจริง + ใบร่างขยะ) เตือนให้ CCO เห็น
+                // + ปุ่มปิดเฉพาะใบร่างขยะ (DRAFT ในกลุ่มที่มีใบจริงแล้ว)
+                (r.isDuplicateReq
+                    ? '<div><span class="req-dup-badge" style="display:inline-block;margin-top:2px;padding:1px 7px;border-radius:10px;background:#f8d7da;color:#842029;font-size:11px;font-weight:600;" ' +
+                      'title="REQ นี้มีใบคำขอ ' + r.duplicateReqCount + ' ใบในผลค้นหานี้ — ปิดใบร่างที่ไม่มีเลขใบคำขอที่ไม่ใช้ออก">⚠ REQ ซ้ำ ' + r.duplicateReqCount + ' ใบ</span>' +
+                      (r.canCloseDuplicateDraft
+                        ? ' <i class="CloseDuplicateDraft fa-solid fa-trash-can row-fix" data-applicationid="' + esc(r.applicationID || '') +
+                          '" title="ปิดใบร่างซ้ำใบนี้ (ยกเลิกใบร่างที่ไม่มีเลขใบคำขอ เหลือใบจริงไว้ในระบบ)" role="button" tabindex="0"></i>'
+                        : '') +
+                      '</div>'
+                    : '') +
             '</td>' +
 
             // เอกสาร

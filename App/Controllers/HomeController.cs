@@ -438,6 +438,32 @@ namespace App.Controllers
                     }
                 };
 
+                // จับ "ใบคำขอซ้ำ" (REQ ซ้ำ) — RefCode เดียวกันปรากฏหลายใบในผลค้นหาชุดนี้
+                // เกิดจาก SGF+/LOS สร้างใบซ้ำต่อ REQ เดียว (ใบจริง 1 + ใบร่างขยะที่เหลือ)
+                // mark ทั้งกลุ่มเพื่อขึ้น badge เตือน และเปิดปุ่มปิดใบร่างขยะเฉพาะที่ปลอดภัย
+                var dupGroups = result.Data
+                    .Where(x => !string.IsNullOrWhiteSpace(x.RefCode))
+                    .GroupBy(x => x.RefCode!.Trim())
+                    .Where(g => g.Count() > 1);
+                foreach (var g in dupGroups)
+                {
+                    var n = g.Count();
+                    // กลุ่มนี้มี "ใบจริง" ไหม = ใบที่ไม่ใช่ DRAFT และมี ApplicationCode (เดินหน้าแล้ว)
+                    // ปิดใบร่างได้ต่อเมื่อมีใบจริงอยู่ด้วย จะได้ไม่ปิดทั้งกลุ่มทิ้งจนไม่เหลือใบ
+                    bool hasReal = g.Any(x =>
+                        !string.Equals(x.ApplicationStatusId, "DRAFT", StringComparison.OrdinalIgnoreCase)
+                        && !string.IsNullOrWhiteSpace(x.ApplicationCode));
+                    foreach (var row in g)
+                    {
+                        row.IsDuplicateReq = true;
+                        row.DuplicateReqCount = n;
+                        // ปิดได้เฉพาะใบร่าง (DRAFT) ในกลุ่มที่มีใบจริงแล้ว — ตรงนิยามที่ตกลงไว้
+                        row.CanCloseDuplicateDraft = hasReal
+                            && string.Equals(row.ApplicationStatusId, "DRAFT", StringComparison.OrdinalIgnoreCase)
+                            && !string.IsNullOrWhiteSpace(row.ApplicationID);
+                    }
+                }
+
                 if (cacheKey != null)
                 {
                     _cache.Set(cacheKey, new CachedSearch(result, DateTime.UtcNow), TimeSpan.FromSeconds(_cacheSeconds));
@@ -537,6 +563,7 @@ namespace App.Controllers
 
             return new SearchRowDto
             {
+                ApplicationID = r.ApplicationID,
                 ApplicationCode = r.ApplicationCode,
                 RefCode = r.RefCode,
                 ApplicationDate = r.ApplicationDate,
@@ -2309,6 +2336,99 @@ namespace App.Controllers
                 Log.Error(ex, "ซ่อมสัญญาซ้ำไม่สำเร็จ: {Code}", code);
                 return StatusCode(StatusCodes.Status500InternalServerError, ActionResultDto.Fail(
                     "แก้สัญญาซ้ำไม่สำเร็จ กรุณาลองใหม่อีกครั้ง หากยังไม่ได้ให้แจ้งทีมผู้ดูแล", ex.Message));
+            }
+        }
+
+        /// <summary>
+        /// ปิด "ใบร่างซ้ำ" (REQ ซ้ำ) — ใบที่ status = DRAFT และไม่มีเลขใบคำขอ ซึ่งเกิดจาก
+        /// SGF+/LOS สร้างใบซ้ำต่อ REQ เดียว (ต้นเหตุตาม presentation 26 ส.ค.) เหลือใบร่างขยะค้าง
+        ///
+        /// อ้างด้วย ApplicationID (PK) เพราะใบร่างขยะมักไม่มี ApplicationCode ให้ใช้เป็น key
+        /// กันปิดผิด 3 ชั้น: (1) ต้องเป็น DRAFT จริง (2) ต้องมี "ใบจริง" (ไม่ใช่ DRAFT + มี
+        /// ApplicationCode) ใน RefCode เดียวกันอยู่ด้วย จะได้ไม่ปิดจนไม่เหลือใบ (3) WHERE ตอน
+        /// UPDATE ยังกรอง DRAFT ซ้ำอีกชั้น (idempotent) — เป็นการปิดแบบ soft (Active=0 + CANCELLED)
+        /// </summary>
+        [RequireLogin]
+        [InvalidateSearchCache]
+        [HttpPost]
+        public async Task<IActionResult> CloseDuplicateDraft([FromBody] CloseDuplicateDraftRq request)
+        {
+            var actor = HttpContext.Session.GetString("EMP_CODE");
+            var id = (request?.ApplicationID ?? "").Trim();
+            Log.Information("ปิดใบร่างซ้ำ: ApplicationID={Id} โดย {Actor}", id, actor);
+
+            // ApplicationID ต้องเป็นตัวเลขล้วน — ค่านี้ถูกประกอบตรงเข้าคำสั่ง SQL (ข้าม linked server
+            // ใช้พารามิเตอร์ไม่ได้) การตรวจรูปแบบเข้มจึงเป็นด่านกัน SQL injection
+            if (string.IsNullOrWhiteSpace(id) || !System.Text.RegularExpressions.Regex.IsMatch(id, @"^[0-9]{1,18}$"))
+            {
+                return BadRequest(ActionResultDto.Fail("รหัสใบคำขอ (ApplicationID) ไม่ถูกต้อง"));
+            }
+
+            try
+            {
+                using var connection = new SqlConnection(strConnString);
+                await connection.OpenAsync();
+
+                // 1) ใบนี้ต้องเป็น DRAFT จริง + ดึง RefCode มาตรวจกลุ่มซ้ำ
+                var info = (await connection.QueryAsync<DraftInfoRow>(new CommandDefinition($@"
+                    SELECT a.ApplicationStatusID AS Status, e.RefCode AS RefCode, a.ApplicationCode AS AppCode
+                    FROM {DATABASEK2}.[Application] a WITH (NOLOCK)
+                    LEFT JOIN {DATABASEK2}.[ApplicationExtend] e WITH (NOLOCK) ON a.ApplicationID = e.ApplicationID
+                    WHERE a.ApplicationID = {id}", commandTimeout: 60))).FirstOrDefault();
+
+                if (info == null || info.Status == null)
+                {
+                    return Ok(ActionResultDto.Fail("ไม่พบใบคำขอนี้ กรุณาค้นหาใหม่อีกครั้ง"));
+                }
+                if (!string.Equals(info.Status, "DRAFT", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Ok(ActionResultDto.Fail(
+                        $"ใบนี้สถานะ {info.Status} ไม่ใช่ใบร่าง จึงปิดไม่ได้ — เครื่องมือนี้ปิดได้เฉพาะใบร่างซ้ำ (DRAFT) เท่านั้น"));
+                }
+                if (string.IsNullOrWhiteSpace(info.RefCode))
+                {
+                    return Ok(ActionResultDto.Fail("ใบร่างนี้ไม่มีเลข REQ (RefCode) จึงยืนยันว่าเป็นใบซ้ำไม่ได้ กรุณาให้ทีมผู้ดูแลตรวจสอบก่อน"));
+                }
+
+                // 2) ต้องมี "ใบจริง" ของ REQ เดียวกันอยู่ด้วย (ไม่ใช่ DRAFT + มี ApplicationCode)
+                //    กันเคสที่ทั้งกลุ่มเป็น DRAFT แล้วเผลอปิดจนไม่เหลือใบให้ลูกค้า
+                var safeRef = info.RefCode.Replace("'", "''");
+                var realCount = await connection.ExecuteScalarAsync<int>(new CommandDefinition($@"
+                    SELECT COUNT(*)
+                    FROM {DATABASEK2}.[ApplicationExtend] e WITH (NOLOCK)
+                    JOIN {DATABASEK2}.[Application] a WITH (NOLOCK) ON a.ApplicationID = e.ApplicationID
+                    WHERE e.RefCode = N'{safeRef}'
+                      AND a.ApplicationStatusID <> 'DRAFT'
+                      AND a.ApplicationCode IS NOT NULL AND LTRIM(RTRIM(a.ApplicationCode)) <> ''", commandTimeout: 60));
+
+                if (realCount < 1)
+                {
+                    return Ok(ActionResultDto.Fail(
+                        "ยังไม่พบใบจริงของ REQ นี้ (ที่มีเลขใบคำขอและเดินหน้าแล้ว) จึงยังไม่ปิดใบร่างให้ เพื่อกันปิดจนไม่เหลือใบ — กรุณาตรวจสอบก่อน"));
+                }
+
+                // 3) ปิดแบบ soft — WHERE กรอง DRAFT ซ้ำอีกชั้น เผื่อมีคนเปลี่ยนสถานะระหว่างนี้
+                var safeActor = (actor ?? "").Replace("'", "''");
+                var affected = await connection.ExecuteAsync(new CommandDefinition($@"
+                    UPDATE {DATABASEK2}.[Application]
+                    SET ApplicationStatusID = 'CANCELLED', Active = 0,
+                        CancelBy = N'{safeActor}', CancelDate = GETDATE()
+                    WHERE ApplicationID = {id} AND ApplicationStatusID = 'DRAFT'", commandTimeout: 60));
+
+                if (affected != 1)
+                {
+                    return Ok(ActionResultDto.Fail("ไม่มีอะไรถูกปิด ใบอาจถูกจัดการไปแล้วโดยคนอื่นระหว่างนี้ กรุณาค้นหาใหม่อีกครั้ง"));
+                }
+
+                Log.Information("ปิดใบร่างซ้ำสำเร็จ: ApplicationID={Id} RefCode={Ref} โดย {Actor}", id, info.RefCode, actor);
+                return Ok(ActionResultDto.Success(
+                    $"ปิดใบร่างซ้ำเรียบร้อย (REQ {info.RefCode}) — เหลือใบจริงไว้ในระบบตามเดิม"));
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "ปิดใบร่างซ้ำไม่สำเร็จ: {Id}", id);
+                return StatusCode(StatusCodes.Status500InternalServerError, ActionResultDto.Fail(
+                    "ปิดใบร่างซ้ำไม่สำเร็จ กรุณาลองใหม่อีกครั้ง หากยังไม่ได้ให้แจ้งทีมผู้ดูแล", ex.Message));
             }
         }
 
